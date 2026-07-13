@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.1] - 2026-07-13
+
+### Added
+
+- `py.typed` marker (PEP 561) for full type checker support (mypy, pyright)
+- `make format-check` target to verify code is formatted
+
+### Changed
+
+- README: import `TableWrapper` in quick start, document type safety, add `make format-check`
+- CONTRIBUTING: add `make format` and `make format-check` to workflow and PR checklist
+
 ## [1.3.0] - 2026-07-13
 
 ### Fixed
