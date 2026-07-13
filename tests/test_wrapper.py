@@ -87,6 +87,13 @@ class TestFindRow:
         wt = wrap(table)
         assert wt.find_row() is None
 
+    def test_returns_copy(self):
+        table = make_table(["name"], [["Alice"]])
+        wt = wrap(table)
+        row = wt.find_row(name="Alice")
+        row["name"] = "modified"
+        assert wt.find_row(name="Alice") is not None
+
 
 class TestValidateColumns:
     def test_all_present(self):
@@ -147,6 +154,30 @@ class TestToCsv:
         csv_str = wt.to_csv()
         assert csv_str == "name,age"
 
+    def test_missing_values_filled_with_empty(self):
+        from behave_tables._mock import MockTable
+
+        mock = MockTable(
+            headings=["name", "age"],
+            rows_data=[{"name": "Alice"}],
+        )
+        wt = wrap(mock)
+        csv_str = wt.to_csv()
+        lines = csv_str.split("\n")
+        assert lines[1] == "Alice,"
+
+    def test_extra_keys_ignored(self):
+        from behave_tables._mock import MockTable
+
+        mock = MockTable(
+            headings=["name"],
+            rows_data=[{"name": "Alice", "extra": "ignored"}],
+        )
+        wt = wrap(mock)
+        csv_str = wt.to_csv()
+        lines = csv_str.split("\n")
+        assert lines[1] == "Alice"
+
 
 class TestToJson:
     def test_basic(self):
@@ -165,6 +196,12 @@ class TestToJson:
         json_str = wt.to_json()
         assert json.loads(json_str) == []
 
+    def test_indent_zero(self):
+        table = make_table(["name"], [["Alice"]])
+        wt = wrap(table)
+        json_str = wt.to_json(indent=0)
+        assert json.loads(json_str) == [{"name": "Alice"}]
+
 
 class TestIteration:
     def test_iter(self):
@@ -173,11 +210,31 @@ class TestIteration:
         rows = [r for r in wt]
         assert rows == [{"name": "Alice"}, {"name": "Bob"}]
 
+    def test_iter_returns_copies(self):
+        table = make_table(["name"], [["Alice"]])
+        wt = wrap(table)
+        for row in wt:
+            row["name"] = "modified"
+        assert wt.as_dicts()[0]["name"] == "Alice"
+
     def test_getitem(self):
         table = make_table(["name", "age"], [["Alice", "30"], ["Bob", "25"]])
         wt = wrap(table)
         assert wt[0] == {"name": "Alice", "age": "30"}
         assert wt[1] == {"name": "Bob", "age": "25"}
+
+    def test_getitem_returns_copy(self):
+        table = make_table(["name"], [["Alice"]])
+        wt = wrap(table)
+        row = wt[0]
+        row["name"] = "modified"
+        assert wt[0]["name"] == "Alice"
+
+    def test_getitem_index_error(self):
+        table = make_table(["name"], [["Alice"]])
+        wt = wrap(table)
+        with pytest.raises(IndexError):
+            wt[5]
 
     def test_len(self):
         table = make_table(["name"], [["Alice"], ["Bob"], ["Charlie"]])

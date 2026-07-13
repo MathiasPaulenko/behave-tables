@@ -22,3 +22,9 @@ class TestColumnMismatchError:
     def test_is_value_error(self):
         err = ColumnMismatchError(missing=["x"])
         assert isinstance(err, ValueError)
+
+    def test_empty_missing_and_extra(self):
+        err = ColumnMismatchError(missing=[])
+        assert "no column mismatch" in str(err)
+        assert err.missing == []
+        assert err.extra == []

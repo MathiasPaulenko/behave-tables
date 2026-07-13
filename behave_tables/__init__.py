@@ -1,19 +1,35 @@
-"""behave-tables — Polished API for Behave Data Tables."""
+"""behave-tables — Polished API for Behave Data Tables.
+
+A thin wrapper around ``behave.model.Table`` that provides ergonomic
+methods for converting data tables to dicts, Pydantic models,
+dataclasses, CSV, and JSON.
+
+Example:
+    >>> from behave_tables import wrap
+    >>> table = wrap(context.table)
+    >>> rows = table.as_dicts()
+"""
 
 from __future__ import annotations
 
 from .exceptions import ColumnMismatchError
-from .wrapper import TableWrapper
+from .wrapper import TableLike, TableWrapper
 
 __version__ = "0.1.0"
 
-__all__ = ["TableWrapper", "wrap", "ColumnMismatchError", "__version__"]
+__all__ = ["TableWrapper", "wrap", "ColumnMismatchError", "TableLike", "__version__"]
 
 
-def wrap(table: object) -> TableWrapper:
-    """Wrap a behave.model.Table with TableWrapper.
+def wrap(table: TableLike) -> TableWrapper:
+    """Wrap a behave.model.Table with ``TableWrapper``.
 
     Convenience function: ``wrap(context.table)`` instead of
     ``TableWrapper(context.table)``.
+
+    Args:
+        table: A table-like object with ``headings`` and ``rows``.
+
+    Returns:
+        A ``TableWrapper`` instance ready to use.
     """
     return TableWrapper(table)

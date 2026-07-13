@@ -30,6 +30,10 @@ class TestIsPydanticModel:
         assert is_pydantic_model(dict) is False
         assert is_pydantic_model(str) is False
 
+    def test_non_type_returns_false(self):
+        assert is_pydantic_model(42) is False
+        assert is_pydantic_model("not_a_class") is False
+
     def test_import_error_returns_false(self):
         with patch("builtins.__import__", side_effect=ImportError):
             assert is_pydantic_model(dict) is False
