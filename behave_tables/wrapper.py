@@ -125,7 +125,7 @@ class TableWrapper:
         Raises:
             KeyError: If the column does not exist in the table.
         """
-        if name not in self.headers:
+        if name not in self._table.headings:
             raise KeyError(
                 f"Column {name!r} not found. Available: {self.headers}"
             )
@@ -210,7 +210,7 @@ class TableWrapper:
         writer.writerows(self._rows)
         return output.getvalue().replace("\r\n", "\n").rstrip("\n")
 
-    def to_json(self, indent: int = 2) -> str:
+    def to_json(self, indent: int | None = 2) -> str:
         """Return the table as a JSON string (list of objects).
 
         Args:

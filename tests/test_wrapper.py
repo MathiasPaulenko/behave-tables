@@ -202,6 +202,13 @@ class TestToJson:
         json_str = wt.to_json(indent=0)
         assert json.loads(json_str) == [{"name": "Alice"}]
 
+    def test_indent_none(self):
+        table = make_table(["name"], [["Alice"]])
+        wt = wrap(table)
+        json_str = wt.to_json(indent=None)
+        assert "\n" not in json_str
+        assert json.loads(json_str) == [{"name": "Alice"}]
+
 
 class TestIteration:
     def test_iter(self):
