@@ -458,3 +458,239 @@ class TestContains:
         table = make_table(["name", "age"], [["Alice", "30"]])
         wt = wrap(table)
         assert {"name": "Alice"} not in wt
+
+
+class TestEdgeCases:
+    """Edge cases for TableWrapper."""
+
+    def test_getitem_negative_index(self, make_table):
+        table = make_table(["name"], [["Alice"], ["Bob"], ["Charlie"]])
+        wt = wrap(table)
+        assert wt[-1] == {"name": "Charlie"}
+        assert wt[-2] == {"name": "Bob"}
+
+    def test_getitem_negative_index_out_of_range(self, make_table):
+        table = make_table(["name"], [["Alice"]])
+        wt = wrap(table)
+        with pytest.raises(IndexError):
+            wt[-5]
+
+    def test_getitem_slice_negative(self, make_table):
+        table = make_table(["name"], [["Alice"], ["Bob"], ["Charlie"]])
+        wt = wrap(table)
+        result = wt[-2:]
+        assert len(result) == 2
+        assert result[0] == {"name": "Bob"}
+        assert result[1] == {"name": "Charlie"}
+
+    def test_getitem_slice_step(self, make_table):
+        table = make_table(["name"], [["A"], ["B"], ["C"], ["D"]])
+        wt = wrap(table)
+        result = wt[::2]
+        assert len(result) == 2
+        assert result[0] == {"name": "A"}
+        assert result[1] == {"name": "C"}
+
+    def test_getitem_slice_full(self, make_table):
+        table = make_table(["name"], [["Alice"], ["Bob"]])
+        wt = wrap(table)
+        result = wt[:]
+        assert len(result) == 2
+
+    def test_getitem_slice_empty_table(self, make_table):
+        table = make_table(["name"], [])
+        wt = wrap(table)
+        assert wt[:] == []
+
+    def test_find_row_nonexistent_column(self, make_table):
+        table = make_table(["name"], [["Alice"]])
+        wt = wrap(table)
+        assert wt.find_row(nonexistent="value") is None
+
+    def test_find_all_rows_nonexistent_column(self, make_table):
+        table = make_table(["name"], [["Alice"]])
+        wt = wrap(table)
+        assert wt.find_all_rows(nonexistent="value") == []
+
+    def test_find_row_multiple_matches_returns_first(self, make_table):
+        table = make_table(["name", "age"], [["Alice", "30"], ["Bob", "30"]])
+        wt = wrap(table)
+        result = wt.find_row(age="30")
+        assert result == {"name": "Alice", "age": "30"}
+
+    def test_find_all_rows_all_match(self, make_table):
+        table = make_table(["name", "age"], [["Alice", "30"], ["Bob", "30"]])
+        wt = wrap(table)
+        result = wt.find_all_rows(age="30")
+        assert len(result) == 2
+
+    def test_validate_columns_strict_exact_match(self, make_table):
+        table = make_table(["name", "age"], [])
+        wt = wrap(table)
+        wt.validate_columns("name", "age", strict=True)
+
+    def test_validate_columns_strict_empty_expected_with_columns(self, make_table):
+        table = make_table(["name", "age"], [])
+        wt = wrap(table)
+        with pytest.raises(ColumnMismatchError, match="unexpected columns"):
+            wt.validate_columns(strict=True)
+
+    def test_validate_columns_strict_empty_table_empty_expected(self, make_table):
+        table = make_table([], [])
+        wt = wrap(table)
+        wt.validate_columns(strict=True)
+
+    def test_validate_columns_duplicate_expected(self, make_table):
+        table = make_table(["name"], [])
+        wt = wrap(table)
+        wt.validate_columns("name", "name")
+
+    def test_validate_columns_strict_duplicate_extra(self, make_table):
+        table = make_table(["name", "extra"], [])
+        wt = wrap(table)
+        with pytest.raises(ColumnMismatchError) as exc_info:
+            wt.validate_columns("name", strict=True)
+        assert exc_info.value.extra == ["extra"]
+
+    def test_column_empty_string_value(self, make_table):
+        table = make_table(["name"], [[""]])
+        wt = wrap(table)
+        assert wt.column("name") == [""]
+
+    def test_column_special_chars_in_header(self, make_table):
+        table = make_table(["naïve", "café"], [["value1", "value2"]])
+        wt = wrap(table)
+        assert wt.column("café") == ["value2"]
+
+    def test_as_dicts_does_not_leak_internal_refs(self, make_table):
+        table = make_table(["name"], [["Alice"], ["Bob"]])
+        wt = wrap(table)
+        dicts1 = wt.as_dicts()
+        dicts2 = wt.as_dicts()
+        assert dicts1[0] is not dicts2[0]
+
+    def test_transpose_single_row(self, make_table):
+        table = make_table(["name", "age"], [["Alice", "30"]])
+        wt = wrap(table)
+        transposed = wt.transpose()
+        assert transposed.headers == ["_column", "0"]
+        assert transposed.as_dicts() == [
+            {"_column": "name", "0": "Alice"},
+            {"_column": "age", "0": "30"},
+        ]
+
+    def test_transpose_single_column(self, make_table):
+        table = make_table(["name"], [["Alice"], ["Bob"]])
+        wt = wrap(table)
+        transposed = wt.transpose()
+        assert transposed.headers == ["_column", "0", "1"]
+        assert transposed.as_dicts() == [
+            {"_column": "name", "0": "Alice", "1": "Bob"},
+        ]
+
+    def test_transpose_preserves_original(self, make_table):
+        table = make_table(["name", "age"], [["Alice", "30"]])
+        wt = wrap(table)
+        original = wt.as_dicts()
+        wt.transpose()
+        assert wt.as_dicts() == original
+
+    def test_transpose_double_transpose_not_identity(self, make_table):
+        table = make_table(["name", "age"], [["Alice", "30"]])
+        wt = wrap(table)
+        double = wt.transpose().transpose()
+        assert double.headers[0] == "_column"
+
+    def test_to_csv_quoting_nonnumeric(self, make_table):
+        import csv as csv_module
+
+        table = make_table(["name"], [["Alice, Jr"]])
+        wt = wrap(table)
+        csv_str = wt.to_csv(quoting=csv_module.QUOTE_MINIMAL)
+        assert '"Alice, Jr"' in csv_str
+
+    def test_to_csv_tab_delimiter(self, make_table):
+        table = make_table(["name", "age"], [["Alice", "30"]])
+        wt = wrap(table)
+        csv_str = wt.to_csv(delimiter="\t")
+        lines = csv_str.split("\n")
+        assert lines[0] == "name\tage"
+        assert lines[1] == "Alice\t30"
+
+    def test_to_json_ensure_ascii_false(self, make_table):
+        table = make_table(["name"], [["café"]])
+        wt = wrap(table)
+        json_str = wt.to_json()
+        assert "café" in json_str
+
+    def test_to_json_sort_keys_multi_keys(self, make_table):
+        table = make_table(["z", "a", "m"], [["1", "2", "3"]])
+        wt = wrap(table)
+        json_str = wt.to_json(sort_keys=True)
+        assert json_str.index('"a"') < json_str.index('"m"') < json_str.index('"z"')
+
+    def test_to_json_indent_default(self, make_table):
+        table = make_table(["name"], [["Alice"]])
+        wt = wrap(table)
+        json_str = wt.to_json()
+        assert "\n" in json_str
+        assert "  " in json_str
+
+    def test_eq_same_instance(self, make_table):
+        table = make_table(["name"], [["Alice"]])
+        wt = wrap(table)
+        assert wt == wt
+
+    def test_eq_different_table_impl_same_data(self, make_table):
+        from behave_tables._table_impl import SimpleTable
+
+        t1 = make_table(["name"], [["Alice"]])
+        t2 = SimpleTable(headings=["name"], rows_data=[{"name": "Alice"}])
+        assert wrap(t1) == wrap(t2)
+
+    def test_eq_empty_tables(self, make_table):
+        t1 = make_table(["name"], [])
+        t2 = make_table(["name"], [])
+        assert wrap(t1) == wrap(t2)
+
+    def test_eq_different_column_order_not_equal(self, make_table):
+        t1 = make_table(["name", "age"], [["Alice", "30"]])
+        t2 = make_table(["age", "name"], [["30", "Alice"]])
+        assert wrap(t1) != wrap(t2)
+
+    def test_contains_empty_dict_in_empty_table(self, make_table):
+        table = make_table(["name"], [])
+        wt = wrap(table)
+        assert {} not in wt
+
+    def test_contains_empty_dict_in_nonempty_table(self, make_table):
+        table = make_table(["name"], [["Alice"]])
+        wt = wrap(table)
+        assert {} not in wt
+
+    def test_contains_exact_match_multiple_columns(self, make_table):
+        table = make_table(["name", "age"], [["Alice", "30"]])
+        wt = wrap(table)
+        assert {"name": "Alice", "age": "30"} in wt
+
+    def test_headers_empty_table(self, make_table):
+        table = make_table([], [])
+        wt = wrap(table)
+        assert wt.headers == []
+
+    def test_iter_empty_table(self, make_table):
+        table = make_table(["name"], [])
+        wt = wrap(table)
+        assert list(wt) == []
+
+    def test_repr_empty_table(self, make_table):
+        table = make_table(["name"], [])
+        wt = wrap(table)
+        r = repr(wt)
+        assert "rows=0" in r
+
+    def test_repr_single_row(self, make_table):
+        table = make_table(["x"], [["1"]])
+        wt = wrap(table)
+        r = repr(wt)
+        assert "rows=1" in r
