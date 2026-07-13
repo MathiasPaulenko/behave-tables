@@ -80,6 +80,4 @@ def convert_row_to_model(row: dict[str, str], model: type) -> Any:
         fields = _model_fields(model)
         filtered = {k: v for k, v in row.items() if fields is None or k in fields}
         return model(**filtered)
-    raise TypeError(
-        f"model must be a Pydantic BaseModel or dataclass, got {model!r}"
-    )
+    raise TypeError(f"model must be a Pydantic BaseModel or dataclass, got {model!r}")

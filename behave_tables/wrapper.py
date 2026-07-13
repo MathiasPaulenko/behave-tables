@@ -132,9 +132,7 @@ class TableWrapper:
             KeyError: If the column does not exist in the table.
         """
         if name not in self._table.headings:
-            raise KeyError(
-                f"Column {name!r} not found. Available: {self._table.headings}"
-            )
+            raise KeyError(f"Column {name!r} not found. Available: {self._table.headings}")
         return [row[name] for row in self._rows]
 
     def find_row(self, **filters: str) -> dict[str, str] | None:
@@ -169,11 +167,7 @@ class TableWrapper:
         """
         if not filters:
             return self.as_dicts()
-        return [
-            dict(row)
-            for row in self._rows
-            if all(row.get(k) == v for k, v in filters.items())
-        ]
+        return [dict(row) for row in self._rows if all(row.get(k) == v for k, v in filters.items())]
 
     def validate_columns(self, *expected: str, strict: bool = False) -> None:
         """Validate that expected columns exist in the table.
@@ -292,9 +286,7 @@ class TableWrapper:
         headings = self._table.headings
         for col in columns:
             if col not in headings:
-                raise KeyError(
-                    f"Column {col!r} not found. Available: {headings}"
-                )
+                raise KeyError(f"Column {col!r} not found. Available: {headings}")
         new_rows = [{col: row.get(col, "") for col in columns} for row in self._rows]
         return TableWrapper(SimpleTable(headings=list(columns), rows_data=new_rows))
 
@@ -313,9 +305,7 @@ class TableWrapper:
         headings = self._table.headings
         for col in columns:
             if col not in headings:
-                raise KeyError(
-                    f"Column {col!r} not found. Available: {headings}"
-                )
+                raise KeyError(f"Column {col!r} not found. Available: {headings}")
         keep = [h for h in headings if h not in columns]
         new_rows = [{col: row.get(col, "") for col in keep} for row in self._rows]
         return TableWrapper(SimpleTable(headings=keep, rows_data=new_rows))
@@ -335,13 +325,9 @@ class TableWrapper:
         headings = self._table.headings
         for old in mapping:
             if old not in headings:
-                raise KeyError(
-                    f"Column {old!r} not found. Available: {headings}"
-                )
+                raise KeyError(f"Column {old!r} not found. Available: {headings}")
         new_headings = [mapping.get(h, h) for h in headings]
-        new_rows = [
-            {mapping.get(k, k): v for k, v in row.items()} for row in self._rows
-        ]
+        new_rows = [{mapping.get(k, k): v for k, v in row.items()} for row in self._rows]
         return TableWrapper(SimpleTable(headings=new_headings, rows_data=new_rows))
 
     def sort(
@@ -363,17 +349,14 @@ class TableWrapper:
             key_func: Callable[[dict[str, str]], Any] = key
         else:
             if key not in self._table.headings:
-                raise KeyError(
-                    f"Column {key!r} not found. Available: {self._table.headings}"
-                )
+                raise KeyError(f"Column {key!r} not found. Available: {self._table.headings}")
             col_name = key
 
             def key_func(row: dict[str, str]) -> Any:
                 return row.get(col_name, "")
+
         new_rows = sorted(self._rows, key=key_func, reverse=reverse)
-        return TableWrapper(
-            SimpleTable(headings=list(self._table.headings), rows_data=new_rows)
-        )
+        return TableWrapper(SimpleTable(headings=list(self._table.headings), rows_data=new_rows))
 
     def unique(self, column: str) -> list[str]:
         """Return unique values for a column, preserving first-seen order.
@@ -388,9 +371,7 @@ class TableWrapper:
             KeyError: If the column does not exist.
         """
         if column not in self._table.headings:
-            raise KeyError(
-                f"Column {column!r} not found. Available: {self._table.headings}"
-            )
+            raise KeyError(f"Column {column!r} not found. Available: {self._table.headings}")
         seen: set[str] = set()
         result: list[str] = []
         for row in self._rows:
@@ -414,9 +395,7 @@ class TableWrapper:
             if row_tuple not in seen:
                 seen.add(row_tuple)
                 new_rows.append(dict(row))
-        return TableWrapper(
-            SimpleTable(headings=list(self._table.headings), rows_data=new_rows)
-        )
+        return TableWrapper(SimpleTable(headings=list(self._table.headings), rows_data=new_rows))
 
     def count(self, **filters: str) -> int:
         """Count rows matching all filters without materializing them.
@@ -429,9 +408,7 @@ class TableWrapper:
         """
         if not filters:
             return len(self._rows)
-        return sum(
-            1 for row in self._rows if all(row.get(k) == v for k, v in filters.items())
-        )
+        return sum(1 for row in self._rows if all(row.get(k) == v for k, v in filters.items()))
 
     def first(self) -> dict[str, str] | None:
         """Return the first row as a dict copy, or ``None`` if empty.
@@ -455,9 +432,7 @@ class TableWrapper:
         Returns:
             A string with one JSON object per line, no trailing newline.
         """
-        return "\n".join(
-            json.dumps(row, ensure_ascii=False) for row in self.as_dicts()
-        )
+        return "\n".join(json.dumps(row, ensure_ascii=False) for row in self.as_dicts())
 
     @classmethod
     def from_csv(cls, csv_string: str, delimiter: str = ",") -> TableWrapper:
@@ -492,16 +467,12 @@ class TableWrapper:
         """
         data = json.loads(json_string)
         if not isinstance(data, list):
-            raise TypeError(
-                f"Expected a JSON list of objects, got {type(data).__name__}"
-            )
+            raise TypeError(f"Expected a JSON list of objects, got {type(data).__name__}")
         seen: set[str] = set()
         headings: list[str] = []
         for row in data:
             if not isinstance(row, dict):
-                raise TypeError(
-                    f"Expected each row to be a JSON object, got {type(row).__name__}"
-                )
+                raise TypeError(f"Expected each row to be a JSON object, got {type(row).__name__}")
             for key in row:
                 if key not in seen:
                     seen.add(key)

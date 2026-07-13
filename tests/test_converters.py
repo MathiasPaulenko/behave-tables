@@ -66,9 +66,7 @@ class TestConvertRowToModel:
         assert result.age == "30"
 
     def test_dataclass_extra_columns_filtered(self):
-        result = convert_row_to_model(
-            {"name": "Alice", "age": "30", "extra": "ignored"}, Sample
-        )
+        result = convert_row_to_model({"name": "Alice", "age": "30", "extra": "ignored"}, Sample)
         assert result.name == "Alice"
         assert result.age == "30"
 
@@ -99,9 +97,7 @@ class TestConvertRowToModelEdgeCases:
         assert result.age is None
 
     def test_dataclass_all_extra_columns(self):
-        result = convert_row_to_model(
-            {"extra1": "x", "extra2": "y"}, SampleWithDefaults
-        )
+        result = convert_row_to_model({"extra1": "x", "extra2": "y"}, SampleWithDefaults)
         assert result.name is None
         assert result.age is None
 
@@ -128,9 +124,7 @@ class TestConvertRowToModelEdgeCases:
         class MyModel(BaseModel):
             name: str
 
-        result = convert_row_to_model(
-            {"name": "Alice", "extra": "ignored"}, MyModel
-        )
+        result = convert_row_to_model({"name": "Alice", "extra": "ignored"}, MyModel)
         assert result.name == "Alice"
 
     def test_pydantic_model_fields(self):
