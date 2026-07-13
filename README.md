@@ -42,7 +42,7 @@ pip install behave-tables[pydantic]
 ## Quick start
 
 ```python
-from behave_tables import wrap
+from behave_tables import TableWrapper, wrap
 
 @then("the users should be")
 def step_impl(context):
@@ -302,6 +302,7 @@ def step_impl(context):
 
 - **Zero dependencies** — no required packages. `as_models()` works with stdlib `dataclasses` out of the box. Install `pydantic` optionally for validation and type coercion.
 - **Immutable returns** — all public methods return copies of internal data. Modifying results never affects the wrapper state.
+- **Type-safe** — ships with `py.typed` (PEP 561) for full type checker support (mypy, pyright).
 - **Defensive by default** — `to_csv()` handles missing values and extra keys gracefully. `is_pydantic_model()` won't crash on non-class input.
 - **Protocol-based** — `TableLike` protocol accepts any object with `headings` and `rows`, not just `behave.model.Table`.
 
@@ -310,12 +311,13 @@ def step_impl(context):
 ## Development
 
 ```bash
-make dev        # install with dev dependencies
-make test       # run tests
-make test-cov   # run tests with coverage
-make lint       # check code style
-make lint-fix   # auto-fix lint issues
-make format     # format code with ruff
+make dev            # install with dev dependencies
+make test           # run tests
+make test-cov       # run tests with coverage
+make lint           # check code style
+make lint-fix       # auto-fix lint issues
+make format         # format code with ruff
+make format-check   # verify code is formatted
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for details.

@@ -17,6 +17,8 @@ This installs the package with dev dependencies (pytest, ruff, behave) and pydan
 ```bash
 make lint        # check code style
 make lint-fix    # auto-fix lint issues
+make format      # format code with ruff
+make format-check # verify code is formatted
 make test        # run tests
 make test-cov    # run tests with coverage report
 ```
@@ -26,7 +28,8 @@ make test-cov    # run tests with coverage report
 1. All tests must pass: `make test`
 2. Coverage must stay at 100%: `make test-cov`
 3. No lint errors: `make lint`
-4. Write clear commit messages (conventional commits preferred)
+4. Code is formatted: `make format-check`
+5. Write clear commit messages (conventional commits preferred)
 
 ## Adding a new feature
 
