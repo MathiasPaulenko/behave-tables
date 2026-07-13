@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0] - 2026-07-13
+
+### Fixed
+
+- `sort()` now raises `KeyError` when the column does not exist (was silently sorting with empty strings)
+- `from_json()` now validates input types — raises `TypeError` for non-list JSON or non-dict rows
+
+### Changed
+
+- `as_models()` return type is now `list[M]` via `TypeVar` instead of `list[Any]`
+- `__hash__` explicitly set to `None` to document unhashable intent
+- `convert_row_to_model()` deduplicated — single branch for pydantic and dataclass
+- Removed unnecessary `pythonpath` from `pyproject.toml` pytest config
+- Module docstring and package description updated to reflect full feature set
+
+### CI/Infra
+
+- Added Python 3.14 to CI matrix
+- Added `ruff format --check` to CI pipeline
+
 ## [1.2.1] - 2026-07-13
 
 ### Fixed
