@@ -6,11 +6,13 @@ import csv
 import io
 import json
 from collections.abc import Callable, Iterator
-from typing import Any, Protocol, overload
+from typing import Any, Protocol, TypeVar, overload
 
 from ._table_impl import SimpleTable
 from .converters import convert_row_to_model
 from .exceptions import ColumnMismatchError
+
+M = TypeVar("M")
 
 
 class TableLike(Protocol):
@@ -95,7 +97,7 @@ class TableWrapper:
         """
         return [dict(row) for row in self._rows]
 
-    def as_models(self, model: type) -> list[Any]:
+    def as_models(self, model: type[M]) -> list[M]:
         """Convert all rows to model instances.
 
         Detects Pydantic v2 ``BaseModel`` and stdlib ``dataclass``
@@ -549,6 +551,8 @@ class TableWrapper:
         if not isinstance(other, TableWrapper):
             return NotImplemented
         return self.headers == other.headers and self._rows == other._rows
+
+    __hash__ = None
 
     def __len__(self) -> int:
         """Return the number of rows."""

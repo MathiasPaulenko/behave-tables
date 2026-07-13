@@ -694,3 +694,9 @@ class TestEdgeCases:
         wt = wrap(table)
         r = repr(wt)
         assert "rows=1" in r
+
+    def test_hash_is_none(self, make_table):
+        table = make_table(["x"], [["1"]])
+        wt = wrap(table)
+        with pytest.raises(TypeError, match="unhashable"):
+            hash(wt)
