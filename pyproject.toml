@@ -1,0 +1,68 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "behave-tables"
+version = "1.0.0"
+description = "Polished API for Behave Data Tables — as_dicts, as_models, transpose, to_csv, to_json"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [
+    { name = "Mathias Paulenko" },
+]
+keywords = ["behave", "bdd", "cucumber", "gherkin", "tables", "data-tables", "testing"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Software Development :: Libraries",
+]
+dependencies = []
+
+[project.optional-dependencies]
+pydantic = ["pydantic>=2.0"]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.5",
+    "behave>=1.2.6",
+]
+
+[project.urls]
+Homepage = "https://github.com/MathiasPaulenko/behave-tables"
+Repository = "https://github.com/MathiasPaulenko/behave-tables"
+Issues = "https://github.com/MathiasPaulenko/behave-tables/issues"
+Changelog = "https://github.com/MathiasPaulenko/behave-tables/blob/main/CHANGELOG.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["behave_tables"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["behave_tables"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+pythonpath = ["."]
+
+[tool.coverage.run]
+source = ["behave_tables"]
+omit = ["*/tests/*"]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 90
