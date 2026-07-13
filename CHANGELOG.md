@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0] - 2026-07-13
+
+### Added
+
+- `select(*columns)` — project to a new wrapper with only the specified columns
+- `drop(*columns)` — return a new wrapper without the specified columns
+- `rename_columns(mapping)` — return a new wrapper with renamed columns
+- `sort(key, reverse=False)` — sort rows by column name or callable
+- `unique(column)` — unique values for a column, preserving first-seen order
+- `distinct()` — remove duplicate rows
+- `count(**filters)` — count matching rows without materializing them
+- `first()` / `last()` — convenience access to first/last row (or `None`)
+- `to_jsonl()` — JSON Lines export (one object per line)
+- `TableWrapper.from_csv(csv_string)` — classmethod to create from CSV
+- `TableWrapper.from_json(json_string)` — classmethod to create from JSON
+- 66 new tests (234 total, 100% coverage)
+
+### Changed
+
+- GitHub Release is now created automatically by CI on tag push
+
 ## [1.1.0] - 2026-07-13
 
 ### Added

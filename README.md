@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/pypi/l/behave-tables.svg)](https://github.com/MathiasPaulenko/behave-tables/blob/main/LICENSE)
 [![Pydantic](https://img.shields.io/badge/pydantic-optional-blue)](https://pypi.org/project/pydantic/)
 
-> Polished API for Behave Data Tables — convert to dicts, Pydantic models, CSV & JSON.
+> Polished API for Behave Data Tables — convert to dicts, Pydantic models, CSV, JSON & JSON Lines.
 > Zero deps · Type-safe · Python 3.11+ · 100% test coverage
 
 ---
@@ -74,6 +74,24 @@ def step_impl(context):
     # Transpose rows and columns
     transposed = table.transpose()
 
+    # Transform
+    selected = table.select("name", "age")
+    cleaned = table.drop("internal_id")
+    renamed = table.rename_columns({"name": "full_name"})
+    sorted_wt = table.sort("age", reverse=True)
+    deduped = table.distinct()
+
+    # Query
+    cities = table.unique("city")
+    count = table.count(age="30")
+    first = table.first()
+    last = table.last()
+
+    # Export & import (round-trip)
+    jsonl = table.to_jsonl()
+    restored = TableWrapper.from_csv(table.to_csv())
+    restored = TableWrapper.from_json(table.to_json())
+
     # Iterate, index, and measure
     for row in table:
         print(row["name"])
@@ -108,6 +126,18 @@ Wrap a `behave.model.Table` (or any table-like object) with `TableWrapper`.
 | `transpose()` | `TableWrapper` | New wrapper with rows and columns swapped |
 | `to_csv(delimiter=",", quoting=QUOTE_MINIMAL)` | `str` | CSV string with configurable delimiter and quoting |
 | `to_json(indent=2, sort_keys=False, default=None)` | `str` | JSON string (list of objects) |
+| `to_jsonl()` | `str` | JSON Lines string (one object per line) |
+| `select(*columns)` | `TableWrapper` | New wrapper with only the specified columns |
+| `drop(*columns)` | `TableWrapper` | New wrapper without the specified columns |
+| `rename_columns(mapping)` | `TableWrapper` | New wrapper with renamed columns |
+| `sort(key, reverse=False)` | `TableWrapper` | New wrapper with rows sorted by column or callable |
+| `unique(column)` | `list[str]` | Unique values for a column (first-seen order) |
+| `distinct()` | `TableWrapper` | New wrapper with duplicate rows removed |
+| `count(**filters)` | `int` | Count rows matching all filters |
+| `first()` | `dict[str, str] \| None` | First row as dict copy, or `None` if empty |
+| `last()` | `dict[str, str] \| None` | Last row as dict copy, or `None` if empty |
+| `from_csv(csv_string, delimiter=",")` | `TableWrapper` | Classmethod: create wrapper from CSV string |
+| `from_json(json_string)` | `TableWrapper` | Classmethod: create wrapper from JSON string |
 | `headers` | `list[str]` | Column names |
 | `__iter__` | `Iterator[dict]` | Iterate rows as dicts |
 | `__getitem__(i)` | `dict[str, str] \| list[dict[str, str]]` | Row at index as dict, or list of dicts for a slice |
@@ -226,7 +256,7 @@ def step_impl(context):
     assert {"name": "Alice", "age": "30"} in table
 ```
 
-### Export
+### Export & import
 
 ```python
 @then("the report is generated")
@@ -234,6 +264,36 @@ def step_impl(context):
     table = wrap(context.table)
     csv_output = table.to_csv(delimiter=";")
     json_output = table.to_json(indent=4, sort_keys=True)
+    jsonl_output = table.to_jsonl()  # one JSON object per line
+
+# Round-trip: export then re-import
+restored = TableWrapper.from_csv(csv_output)
+restored = TableWrapper.from_json(json_output)
+```
+
+### Transform
+
+```python
+@then("the user names are extracted")
+def step_impl(context):
+    table = wrap(context.table)
+    names_only = table.select("name")
+    without_id = table.drop("internal_id")
+    renamed = table.rename_columns({"name": "full_name"})
+    sorted_by_age = table.sort("age", reverse=True)
+    deduped = table.distinct()
+```
+
+### Query
+
+```python
+@then("the statistics are computed")
+def step_impl(context):
+    table = wrap(context.table)
+    cities = table.unique("city")
+    count = table.count(age="30")
+    first_user = table.first()
+    last_user = table.last()
 ```
 
 ---
