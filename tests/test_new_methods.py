@@ -1,4 +1,8 @@
-"""Tests for new TableWrapper methods: select, drop, rename, sort, unique, distinct, count, first, last, to_jsonl, from_csv, from_json."""
+"""Tests for new TableWrapper methods.
+
+Covers: select, drop, rename_columns, sort, unique, distinct,
+count, first, last, to_jsonl, from_csv, from_json.
+"""
 
 from __future__ import annotations
 
@@ -263,7 +267,10 @@ class TestCount:
         assert wt.count(age="30") == 2
 
     def test_multiple_filters(self, make_table):
-        table = make_table(["name", "age", "city"], [["Alice", "30", "NYC"], ["Bob", "30", "NYC"], ["Charlie", "30", "LA"]])
+        table = make_table(
+            ["name", "age", "city"],
+            [["Alice", "30", "NYC"], ["Bob", "30", "NYC"], ["Charlie", "30", "LA"]],
+        )
         wt = wrap(table)
         assert wt.count(age="30", city="NYC") == 2
 

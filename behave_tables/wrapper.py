@@ -360,7 +360,10 @@ class TableWrapper:
         if callable(key):
             key_func: Callable[[dict[str, str]], Any] = key
         else:
-            key_func = lambda row: row.get(key, "")
+            col_name = key
+
+            def key_func(row: dict[str, str]) -> Any:
+                return row.get(col_name, "")
         new_rows = sorted(self._rows, key=key_func, reverse=reverse)
         return TableWrapper(
             SimpleTable(headings=list(self._table.headings), rows_data=new_rows)
