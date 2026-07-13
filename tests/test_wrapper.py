@@ -204,6 +204,40 @@ class TestHeaders:
         assert wt.headers == ["name"]
 
 
+class TestExtractRows:
+    def test_row_with_getitem_no_as_dict(self):
+        class SimpleRow:
+            def __init__(self, data):
+                self._data = data
+
+            def __getitem__(self, key):
+                return self._data[key]
+
+        class SimpleTable:
+            headings = ["name", "age"]
+
+            @property
+            def rows(self):
+                return [SimpleRow({"name": "Alice", "age": "30"})]
+
+        wt = wrap(SimpleTable())
+        assert wt.as_dicts() == [{"name": "Alice", "age": "30"}]
+
+    def test_unsupported_row_type(self):
+        class BadRow:
+            pass
+
+        class BadTable:
+            headings = ["name"]
+
+            @property
+            def rows(self):
+                return [BadRow()]
+
+        with pytest.raises(TypeError, match="Unsupported row type"):
+            wrap(BadTable())
+
+
 class TestRepr:
     def test_repr(self):
         table = make_table(["name", "age"], [["Alice", "30"], ["Bob", "25"]])

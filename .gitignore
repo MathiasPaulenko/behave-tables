@@ -12,3 +12,11 @@ coverage.xml
 .tox/
 .mypy_cache/
 .ruff_cache/
+.venv/
+venv/
+.env
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
