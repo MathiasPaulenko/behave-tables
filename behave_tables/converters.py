@@ -76,11 +76,7 @@ def convert_row_to_model(row: dict[str, str], model: type) -> Any:
     Raises:
         TypeError: If ``model`` is not a Pydantic model or dataclass.
     """
-    if is_pydantic_model(model):
-        fields = _model_fields(model)
-        filtered = {k: v for k, v in row.items() if fields is None or k in fields}
-        return model(**filtered)
-    if is_dataclass_type(model):
+    if is_pydantic_model(model) or is_dataclass_type(model):
         fields = _model_fields(model)
         filtered = {k: v for k, v in row.items() if fields is None or k in fields}
         return model(**filtered)

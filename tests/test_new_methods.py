@@ -185,6 +185,12 @@ class TestSort:
         wt.sort("name")
         assert wt[0]["name"] == "Bob"
 
+    def test_missing_column_raises(self, make_table):
+        table = make_table(["name"], [["Alice"]])
+        wt = wrap(table)
+        with pytest.raises(KeyError, match="not found"):
+            wt.sort("nonexistent")
+
 
 class TestUnique:
     def test_basic(self, make_table):
@@ -447,3 +453,15 @@ class TestFromJson:
         restored = TableWrapper.from_json("[" + ",".join(lines) + "]")
         assert restored.headers == wt.headers
         assert restored.as_dicts() == wt.as_dicts()
+
+    def test_invalid_json_type_raises(self):
+        with pytest.raises(TypeError, match="Expected a JSON list"):
+            TableWrapper.from_json('{"name": "Alice"}')
+
+    def test_invalid_row_type_raises(self):
+        with pytest.raises(TypeError, match="Expected each row to be a JSON object"):
+            TableWrapper.from_json('["not-a-dict"]')
+
+    def test_empty_string_raises(self):
+        with pytest.raises(json.JSONDecodeError):
+            TableWrapper.from_json("")

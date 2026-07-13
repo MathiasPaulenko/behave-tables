@@ -362,6 +362,10 @@ class TableWrapper:
         if callable(key):
             key_func: Callable[[dict[str, str]], Any] = key
         else:
+            if key not in self._table.headings:
+                raise KeyError(
+                    f"Column {key!r} not found. Available: {self._table.headings}"
+                )
             col_name = key
 
             def key_func(row: dict[str, str]) -> Any:
@@ -487,9 +491,17 @@ class TableWrapper:
             A new ``TableWrapper`` instance.
         """
         data = json.loads(json_string)
+        if not isinstance(data, list):
+            raise TypeError(
+                f"Expected a JSON list of objects, got {type(data).__name__}"
+            )
         seen: set[str] = set()
         headings: list[str] = []
         for row in data:
+            if not isinstance(row, dict):
+                raise TypeError(
+                    f"Expected each row to be a JSON object, got {type(row).__name__}"
+                )
             for key in row:
                 if key not in seen:
                     seen.add(key)

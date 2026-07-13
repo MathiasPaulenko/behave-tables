@@ -2,7 +2,8 @@
 
 A thin wrapper around ``behave.model.Table`` that provides ergonomic
 methods for converting data tables to dicts, Pydantic models,
-dataclasses, CSV, and JSON.
+dataclasses, CSV, JSON, and JSON Lines. Supports column selection,
+renaming, sorting, deduplication, and round-trip import/export.
 
 Example:
     >>> from behave_tables import wrap

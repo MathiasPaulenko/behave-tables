@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11", "3.12", "3.13"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -23,6 +23,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e ".[dev,pydantic]"
       - run: ruff check .
+      - run: ruff format --check .
       - run: pytest tests/ -v --cov --cov-report=xml
       - uses: codecov/codecov-action@v3
         if: matrix.python-version == '3.12'
