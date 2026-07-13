@@ -7,7 +7,12 @@ from unittest.mock import patch
 
 import pytest
 
-from behave_tables.converters import _model_fields, convert_row_to_model, is_dataclass_type, is_pydantic_model
+from behave_tables.converters import (
+    _model_fields,
+    convert_row_to_model,
+    is_dataclass_type,
+    is_pydantic_model,
+)
 
 
 @dataclass
