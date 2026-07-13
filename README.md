@@ -61,9 +61,15 @@ def step_impl(context):
     # Find the first matching row
     alice = table.find_row(name="Alice")  # {"name": "Alice", "age": "30"}
 
+    # Find all matching rows
+    thirty_somethings = table.find_all_rows(age="30")
+
+    # Validate columns (strict mode detects extras too)
+    table.validate_columns("name", "age", strict=True)
+
     # Export
-    csv_str = table.to_csv()
-    json_str = table.to_json()
+    csv_str = table.to_csv(delimiter=";")
+    json_str = table.to_json(sort_keys=True)
 
     # Transpose rows and columns
     transposed = table.transpose()
@@ -72,8 +78,13 @@ def step_impl(context):
     for row in table:
         print(row["name"])
 
-    table[0]   # {"name": "Alice", "age": "30"}
-    len(table) # 2
+    table[0]     # {"name": "Alice", "age": "30"}
+    table[0:2]   # [{"name": "Alice", "age": "30"}, {"name": "Bob", "age": "25"}]
+    len(table)   # 2
+
+    # Compare and check membership
+    assert table == wrap(other_table)
+    assert {"name": "Alice", "age": "30"} in table
 ```
 
 ---
@@ -92,18 +103,22 @@ Wrap a `behave.model.Table` (or any table-like object) with `TableWrapper`.
 | `as_models(model)` | `list[Model]` | Rows as Pydantic v2 or dataclass instances |
 | `column(name)` | `list[str]` | Values for a single column |
 | `find_row(**filters)` | `dict[str, str] \| None` | First row matching all filters |
-| `validate_columns(*expected)` | `None` | Raise `ColumnMismatchError` if columns missing |
+| `find_all_rows(**filters)` | `list[dict[str, str]]` | All rows matching all filters (copies) |
+| `validate_columns(*expected, strict=False)` | `None` | Raise `ColumnMismatchError` if columns missing or unexpected |
 | `transpose()` | `TableWrapper` | New wrapper with rows and columns swapped |
-| `to_csv()` | `str` | CSV string |
-| `to_json(indent=2)` | `str` | JSON string (list of objects) |
+| `to_csv(delimiter=",", quoting=QUOTE_MINIMAL)` | `str` | CSV string with configurable delimiter and quoting |
+| `to_json(indent=2, sort_keys=False, default=None)` | `str` | JSON string (list of objects) |
 | `headers` | `list[str]` | Column names |
 | `__iter__` | `Iterator[dict]` | Iterate rows as dicts |
-| `__getitem__(i)` | `dict[str, str]` | Row at index as dict |
+| `__getitem__(i)` | `dict[str, str] \| list[dict[str, str]]` | Row at index as dict, or list of dicts for a slice |
 | `__len__` | `int` | Number of rows |
+| `__eq__` | `bool` | Compare by headers and rows |
+| `__contains__` | `bool` | Check if a row dict is present |
+| `__repr__` | `str` | Unambiguous representation |
 
 ### `ColumnMismatchError`
 
-Raised by `validate_columns()` when expected columns are missing. Subclass of `ValueError`.
+Raised by `validate_columns()` when expected columns are missing or unexpected columns are found. Subclass of `ValueError`.
 
 ```python
 from behave_tables import wrap, ColumnMismatchError
@@ -113,6 +128,13 @@ try:
     table.validate_columns("name", "email")
 except ColumnMismatchError as e:
     print(e.missing)  # ["email"]
+
+# Strict mode: also detects unexpected columns
+try:
+    table.validate_columns("name", strict=True)
+except ColumnMismatchError as e:
+    print(e.missing)  # []
+    print(e.extra)   # ["age", "email"]
 ```
 
 ---
@@ -159,6 +181,12 @@ def step_impl(context):
     table = wrap(context.table)
     table.validate_columns("name", "email", "role")
     # Proceed with confidence that columns exist
+
+# Strict mode: ensure no extra columns
+@then("the user list has exactly these columns")
+def step_impl(context):
+    table = wrap(context.table)
+    table.validate_columns("name", "email", strict=True)
 ```
 
 ### Transpose
@@ -172,14 +200,40 @@ def step_impl(context):
     # Original row indices become the new headers ("0", "1", ...)
 ```
 
+### Find rows
+
+```python
+@then("users aged 30 should exist")
+def step_impl(context):
+    table = wrap(context.table)
+    users = table.find_all_rows(age="30")
+    assert len(users) == 2
+
+    # Find first match
+    alice = table.find_row(name="Alice")
+```
+
+### Compare and check membership
+
+```python
+@then("the table matches expected data")
+def step_impl(context):
+    table = wrap(context.table)
+    other = wrap(other_table)
+    assert table == other
+
+    # Check if a row exists
+    assert {"name": "Alice", "age": "30"} in table
+```
+
 ### Export
 
 ```python
 @then("the report is generated")
 def step_impl(context):
     table = wrap(context.table)
-    csv_output = table.to_csv()
-    json_output = table.to_json(indent=4)
+    csv_output = table.to_csv(delimiter=";")
+    json_output = table.to_json(indent=4, sort_keys=True)
 ```
 
 ---
@@ -201,6 +255,7 @@ make test       # run tests
 make test-cov   # run tests with coverage
 make lint       # check code style
 make lint-fix   # auto-fix lint issues
+make format     # format code with ruff
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
