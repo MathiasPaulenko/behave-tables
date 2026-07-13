@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
 
 
 @dataclass
@@ -14,7 +13,7 @@ class FakeRow:
     headings: list[str]
 
     def as_dict(self) -> dict[str, str]:
-        return dict(zip(self.headings, self.cells))
+        return dict(zip(self.headings, self.cells, strict=True))
 
     def __getitem__(self, key: str) -> str:
         idx = self.headings.index(key)

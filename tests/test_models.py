@@ -5,9 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import pytest
+from helpers import make_table
 
 from behave_tables import wrap
-from helpers import make_table
 
 
 @dataclass
@@ -39,7 +39,7 @@ class TestAsModelsDataclass:
 
 class TestAsModelsPydantic:
     def test_basic(self):
-        pydantic = pytest.importorskip("pydantic")
+        pytest.importorskip("pydantic")
         from pydantic import BaseModel
 
         class UserPyd(BaseModel):

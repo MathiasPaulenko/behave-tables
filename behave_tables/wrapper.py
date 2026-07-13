@@ -5,7 +5,8 @@ from __future__ import annotations
 import csv
 import io
 import json
-from typing import Any, Iterator, Protocol
+from collections.abc import Iterator
+from typing import Any, Protocol
 
 from .converters import convert_row_to_model
 from .exceptions import ColumnMismatchError
@@ -107,7 +108,7 @@ class TableWrapper:
         new_headers = [str(i) for i in range(len(self._rows))]
         new_rows: list[dict[str, str]] = []
 
-        for col_idx, header in enumerate(self.headers):
+        for header in self.headers:
             row_dict: dict[str, str] = {"_column": header}
             for row_idx, row in enumerate(self._rows):
                 row_dict[str(row_idx)] = row[header]

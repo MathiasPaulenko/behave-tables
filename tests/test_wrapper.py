@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 
 import pytest
-
-from behave_tables import TableWrapper, wrap, ColumnMismatchError
 from helpers import make_table
+
+from behave_tables import ColumnMismatchError, wrap
 
 
 class TestAsDicts:

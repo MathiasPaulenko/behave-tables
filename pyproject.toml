@@ -57,7 +57,7 @@ known-first-party = ["behave_tables"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
-pythonpath = ["."]
+pythonpath = [".", "tests"]
 
 [tool.coverage.run]
 source = ["behave_tables"]
