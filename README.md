@@ -7,58 +7,76 @@
 [![License](https://img.shields.io/pypi/l/behave-tables.svg)](https://github.com/MathiasPaulenko/behave-tables/blob/main/LICENSE)
 [![Pydantic](https://img.shields.io/badge/pydantic-optional-blue)](https://pypi.org/project/pydantic/)
 
-Polished API for Behave Data Tables — convert to dicts, Pydantic models, CSV & JSON. Zero deps, type-safe, Python 3.11+.
+> Polished API for Behave Data Tables — convert to dicts, Pydantic models, CSV & JSON.
+> Zero deps · Type-safe · Python 3.11+ · 100% test coverage
+
+---
 
 ## Why?
 
-Behave's `Table` requires manual iteration: `for row in table.rows: name = row["name"]`. No conversion to dicts, models, CSV, or JSON. Every project reimplements helpers.
+Behave's `Table` requires manual iteration:
+
+```python
+# Without behave-tables — repetitive, error-prone
+for row in context.table.rows:
+    name = row["name"]
+    age = row["age"]
+    # No dicts, no models, no CSV, no JSON...
+```
+
+Every project reimplements the same helpers. **behave-tables** fixes this with a single `wrap()` call.
+
+---
 
 ## Install
 
 ```bash
 pip install behave-tables
-# Optional: pydantic for as_models() with validation
+
+# Optional: pydantic for as_models() with validation & type coercion
 pip install behave-tables[pydantic]
 ```
+
+---
 
 ## Quick start
 
 ```python
 from behave_tables import wrap
 
-# In a step definition
 @then("the users should be")
 def step_impl(context):
     table = wrap(context.table)
 
-    # As dicts
+    # Convert to dicts
     users = table.as_dicts()
     # [{"name": "Alice", "age": "30"}, {"name": "Bob", "age": "25"}]
 
-    # As models (Pydantic or dataclass)
+    # Convert to models (Pydantic v2 or dataclass)
     users = table.as_models(User)
 
-    # Column extraction
+    # Extract a single column
     names = table.column("name")  # ["Alice", "Bob"]
 
-    # Find first matching row
+    # Find the first matching row
     alice = table.find_row(name="Alice")  # {"name": "Alice", "age": "30"}
 
     # Export
     csv_str = table.to_csv()
     json_str = table.to_json()
 
-    # Transpose
+    # Transpose rows and columns
     transposed = table.transpose()
 
-    # Iterate as dicts
+    # Iterate, index, and measure
     for row in table:
         print(row["name"])
 
-    # Index
-    table[0]  # {"name": "Alice", "age": "30"}
-    len(table)  # 2
+    table[0]   # {"name": "Alice", "age": "30"}
+    len(table) # 2
 ```
+
+---
 
 ## API
 
@@ -69,7 +87,7 @@ Wrap a `behave.model.Table` (or any table-like object) with `TableWrapper`.
 ### `TableWrapper`
 
 | Method | Returns | Description |
-|---|---|---|
+| :--- | :--- | :--- |
 | `as_dicts()` | `list[dict[str, str]]` | All rows as dicts (copies) |
 | `as_models(model)` | `list[Model]` | Rows as Pydantic v2 or dataclass instances |
 | `column(name)` | `list[str]` | Values for a single column |
@@ -96,6 +114,8 @@ try:
 except ColumnMismatchError as e:
     print(e.missing)  # ["email"]
 ```
+
+---
 
 ## Examples
 
@@ -138,6 +158,7 @@ def step_impl(context):
 def step_impl(context):
     table = wrap(context.table)
     table.validate_columns("name", "email", "role")
+    # Proceed with confidence that columns exist
 ```
 
 ### Transpose
@@ -161,9 +182,16 @@ def step_impl(context):
     json_output = table.to_json(indent=4)
 ```
 
-## Zero dependencies
+---
 
-`behave-tables` has no required dependencies. `as_models()` works with stdlib `dataclasses` out of the box. Install `pydantic` optionally for validation and type coercion.
+## Design principles
+
+- **Zero dependencies** — no required packages. `as_models()` works with stdlib `dataclasses` out of the box. Install `pydantic` optionally for validation and type coercion.
+- **Immutable returns** — all public methods return copies of internal data. Modifying results never affects the wrapper state.
+- **Defensive by default** — `to_csv()` handles missing values and extra keys gracefully. `is_pydantic_model()` won't crash on non-class input.
+- **Protocol-based** — `TableLike` protocol accepts any object with `headings` and `rows`, not just `behave.model.Table`.
+
+---
 
 ## Development
 
@@ -176,6 +204,8 @@ make lint-fix   # auto-fix lint issues
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+
+---
 
 ## License
 
