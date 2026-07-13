@@ -95,6 +95,46 @@ class TestFindRow:
         assert wt.find_row(name="Alice") is not None
 
 
+class TestFindAllRows:
+    def test_single_filter(self):
+        table = make_table(
+            ["name", "age"],
+            [["Alice", "30"], ["Bob", "30"], ["Charlie", "25"]],
+        )
+        wt = wrap(table)
+        result = wt.find_all_rows(age="30")
+        assert len(result) == 2
+        assert result[0] == {"name": "Alice", "age": "30"}
+        assert result[1] == {"name": "Bob", "age": "30"}
+
+    def test_multiple_filters(self):
+        table = make_table(
+            ["name", "age", "city"],
+            [["Alice", "30", "NYC"], ["Bob", "30", "NYC"], ["Charlie", "30", "LA"]],
+        )
+        wt = wrap(table)
+        result = wt.find_all_rows(age="30", city="NYC")
+        assert len(result) == 2
+
+    def test_no_match(self):
+        table = make_table(["name"], [["Alice"]])
+        wt = wrap(table)
+        assert wt.find_all_rows(name="Charlie") == []
+
+    def test_no_filters_returns_all(self):
+        table = make_table(["name"], [["Alice"], ["Bob"]])
+        wt = wrap(table)
+        result = wt.find_all_rows()
+        assert len(result) == 2
+
+    def test_returns_copies(self):
+        table = make_table(["name"], [["Alice"]])
+        wt = wrap(table)
+        rows = wt.find_all_rows()
+        rows[0]["name"] = "modified"
+        assert wt.find_all_rows()[0]["name"] == "Alice"
+
+
 class TestValidateColumns:
     def test_all_present(self):
         table = make_table(["name", "age", "email"], [])
@@ -111,6 +151,25 @@ class TestValidateColumns:
         table = make_table(["name"], [])
         wt = wrap(table)
         wt.validate_columns()
+
+    def test_strict_detects_extra(self):
+        table = make_table(["name", "age", "extra"], [])
+        wt = wrap(table)
+        with pytest.raises(ColumnMismatchError, match="unexpected columns"):
+            wt.validate_columns("name", "age", strict=True)
+
+    def test_strict_no_extra(self):
+        table = make_table(["name", "age"], [])
+        wt = wrap(table)
+        wt.validate_columns("name", "age", strict=True)
+
+    def test_strict_missing_and_extra(self):
+        table = make_table(["name", "extra"], [])
+        wt = wrap(table)
+        with pytest.raises(ColumnMismatchError) as exc_info:
+            wt.validate_columns("name", "age", strict=True)
+        assert "age" in exc_info.value.missing
+        assert "extra" in exc_info.value.extra
 
 
 class TestTranspose:
@@ -178,6 +237,24 @@ class TestToCsv:
         lines = csv_str.split("\n")
         assert lines[1] == "Alice"
 
+    def test_custom_delimiter(self):
+        table = make_table(["name", "age"], [["Alice", "30"]])
+        wt = wrap(table)
+        csv_str = wt.to_csv(delimiter=";")
+        lines = csv_str.split("\n")
+        assert lines[0] == "name;age"
+        assert lines[1] == "Alice;30"
+
+    def test_quoting_all(self):
+        import csv as csv_module
+
+        table = make_table(["name", "age"], [["Alice", "30"]])
+        wt = wrap(table)
+        csv_str = wt.to_csv(quoting=csv_module.QUOTE_ALL)
+        lines = csv_str.split("\n")
+        assert lines[0] == '"name","age"'
+        assert lines[1] == '"Alice","30"'
+
 
 class TestToJson:
     def test_basic(self):
@@ -207,6 +284,18 @@ class TestToJson:
         wt = wrap(table)
         json_str = wt.to_json(indent=None)
         assert "\n" not in json_str
+        assert json.loads(json_str) == [{"name": "Alice"}]
+
+    def test_sort_keys(self):
+        table = make_table(["name", "age"], [["Alice", "30"]])
+        wt = wrap(table)
+        json_str = wt.to_json(sort_keys=True)
+        assert json_str.index("age") < json_str.index("name")
+
+    def test_default_handler(self):
+        table = make_table(["name"], [["Alice"]])
+        wt = wrap(table)
+        json_str = wt.to_json(default=str)
         assert json.loads(json_str) == [{"name": "Alice"}]
 
 
@@ -242,6 +331,26 @@ class TestIteration:
         wt = wrap(table)
         with pytest.raises(IndexError):
             wt[5]
+
+    def test_getitem_slice(self):
+        table = make_table(["name"], [["Alice"], ["Bob"], ["Charlie"]])
+        wt = wrap(table)
+        result = wt[0:2]
+        assert len(result) == 2
+        assert result[0] == {"name": "Alice"}
+        assert result[1] == {"name": "Bob"}
+
+    def test_getitem_slice_returns_copies(self):
+        table = make_table(["name"], [["Alice"], ["Bob"]])
+        wt = wrap(table)
+        rows = wt[0:2]
+        rows[0]["name"] = "modified"
+        assert wt[0]["name"] == "Alice"
+
+    def test_getitem_slice_empty(self):
+        table = make_table(["name"], [["Alice"]])
+        wt = wrap(table)
+        assert wt[5:10] == []
 
     def test_len(self):
         table = make_table(["name"], [["Alice"], ["Bob"], ["Charlie"]])
@@ -310,3 +419,43 @@ class TestRepr:
         assert "TableWrapper" in r
         assert "name" in r
         assert "rows=2" in r
+
+
+class TestEq:
+    def test_equal(self):
+        t1 = make_table(["name"], [["Alice"], ["Bob"]])
+        t2 = make_table(["name"], [["Alice"], ["Bob"]])
+        assert wrap(t1) == wrap(t2)
+
+    def test_not_equal_rows(self):
+        t1 = make_table(["name"], [["Alice"]])
+        t2 = make_table(["name"], [["Bob"]])
+        assert wrap(t1) != wrap(t2)
+
+    def test_not_equal_headers(self):
+        t1 = make_table(["name"], [["Alice"]])
+        t2 = make_table(["age"], [["Alice"]])
+        assert wrap(t1) != wrap(t2)
+
+    def test_not_equal_to_non_wrapper(self):
+        table = make_table(["name"], [["Alice"]])
+        wt = wrap(table)
+        assert wt != "not a wrapper"
+        assert wt != 42
+
+
+class TestContains:
+    def test_present(self):
+        table = make_table(["name"], [["Alice"], ["Bob"]])
+        wt = wrap(table)
+        assert {"name": "Alice"} in wt
+
+    def test_absent(self):
+        table = make_table(["name"], [["Alice"]])
+        wt = wrap(table)
+        assert {"name": "Charlie"} not in wt
+
+    def test_partial_match_absent(self):
+        table = make_table(["name", "age"], [["Alice", "30"]])
+        wt = wrap(table)
+        assert {"name": "Alice"} not in wt

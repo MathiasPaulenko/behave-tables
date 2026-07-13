@@ -36,6 +36,13 @@ class TestAsModelsDataclass:
         with pytest.raises(TypeError, match="Pydantic BaseModel or dataclass"):
             wt.as_models(dict)
 
+    def test_extra_columns_ignored(self):
+        table = make_table(["name", "age", "extra"], [["Alice", "30", "ignored"]])
+        wt = wrap(table)
+        users = wt.as_models(UserDC)
+        assert users[0].name == "Alice"
+        assert users[0].age == "30"
+
 
 class TestAsModelsPydantic:
     def test_basic(self):
@@ -66,3 +73,17 @@ class TestAsModelsPydantic:
         wt = wrap(table)
         with pytest.raises(ValidationError):
             wt.as_models(StrictUser)
+
+    def test_pydantic_extra_columns_ignored(self):
+        pytest.importorskip("pydantic")
+        from pydantic import BaseModel
+
+        class UserPyd(BaseModel):
+            name: str
+            age: int
+
+        table = make_table(["name", "age", "extra"], [["Alice", "30", "ignored"]])
+        wt = wrap(table)
+        users = wt.as_models(UserPyd)
+        assert users[0].name == "Alice"
+        assert users[0].age == 30

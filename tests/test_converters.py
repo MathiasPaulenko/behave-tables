@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from behave_tables.converters import convert_row_to_model, is_dataclass_type, is_pydantic_model
+from behave_tables.converters import _model_fields, convert_row_to_model, is_dataclass_type, is_pydantic_model
 
 
 @dataclass
@@ -54,6 +54,23 @@ class TestConvertRowToModel:
         assert result.name == "Alice"
         assert result.age == "30"
 
+    def test_dataclass_extra_columns_filtered(self):
+        result = convert_row_to_model(
+            {"name": "Alice", "age": "30", "extra": "ignored"}, Sample
+        )
+        assert result.name == "Alice"
+        assert result.age == "30"
+
     def test_non_model_raises_type_error(self):
         with pytest.raises(TypeError, match="Pydantic BaseModel or dataclass"):
             convert_row_to_model({"x": "1"}, dict)
+
+
+class TestModelFields:
+    def test_dataclass_fields(self):
+        fields = _model_fields(Sample)
+        assert fields == {"name", "age"}
+
+    def test_non_model_returns_none(self):
+        assert _model_fields(dict) is None
+        assert _model_fields(str) is None
