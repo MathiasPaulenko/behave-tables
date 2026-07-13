@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "behave-tables"
-version = "1.0.0"
+version = "0.1.0"
 description = "Polished API for Behave Data Tables — as_dicts, as_models, transpose, to_csv, to_json"
 readme = "README.md"
 license = "MIT"
@@ -14,7 +14,7 @@ authors = [
 ]
 keywords = ["behave", "bdd", "cucumber", "gherkin", "tables", "data-tables", "testing"]
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
