@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0] - 2026-07-13
+
+### Added
+
+- `find_all_rows(**filters)` — return all rows matching filters (copies)
+- `__getitem__` slice support — `table[0:2]` returns list of dict copies
+- `__eq__` — compare two wrappers by headers and rows
+- `__contains__` — check if a row dict is present in the table
+- `to_csv(delimiter, quoting)` — configurable CSV delimiter and quoting level
+- `to_json(sort_keys, default)` — sort keys and custom serializer support
+- `validate_columns(strict=True)` — detect unexpected columns in addition to missing
+- `as_models()` filters extra columns automatically (dataclass and Pydantic)
+- `ColumnMismatchError.__repr__` — unambiguous representation with missing and extra
+- `[tool.ruff.format]` configuration in `pyproject.toml`
+- `make format` target in Makefile
+- 78 new edge-case tests (168 total, 100% coverage)
+
+### Changed
+
+- Renamed internal `_mock.py` to `_table_impl.py` (`MockTable` → `SimpleTable`)
+- `transpose()` uses top-level import instead of deferred import
+- `column()` error message uses `self._table.headings` instead of `self.headers` copy
+- `validate_columns()` uses `set(self._table.headings)` instead of `self.headers` copy
+- `to_json()` serializes `self.as_dicts()` instead of internal `self._rows` references
+- Test helpers moved from `helpers.py` to `conftest.py` as `@pytest.fixture`
+
+### Fixed
+
+- CI Codecov upload: downgraded to `codecov-action@v3` for tokenless upload
+- Ruff import sorting issue in `wrapper.py`
+
 ## [1.0.0] - 2026-07-13
 
 ### Added
