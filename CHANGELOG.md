@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.1] - 2026-07-13
+
+### Fixed
+
+- Ruff lint errors in test_new_methods (E501) and sort method (B023)
+
 ## [1.2.0] - 2026-07-13
 
 ### Added

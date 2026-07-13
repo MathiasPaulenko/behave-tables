@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "behave-tables"
-version = "1.2.0"
+version = "1.2.1"
 description = "Polished API for Behave Data Tables — as_dicts, as_models, transpose, to_csv, to_json"
 readme = "README.md"
 license = "MIT"
