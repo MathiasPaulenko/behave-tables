@@ -8,6 +8,7 @@ import json
 from collections.abc import Iterator
 from typing import Any, Protocol, overload
 
+from ._table_impl import SimpleTable
 from .converters import convert_row_to_model
 from .exceptions import ColumnMismatchError
 
@@ -130,7 +131,7 @@ class TableWrapper:
         """
         if name not in self._table.headings:
             raise KeyError(
-                f"Column {name!r} not found. Available: {self.headers}"
+                f"Column {name!r} not found. Available: {self._table.headings}"
             )
         return [row[name] for row in self._rows]
 
@@ -200,8 +201,6 @@ class TableWrapper:
         Returns:
             A new ``TableWrapper`` instance with the transposed data.
         """
-        from ._mock import MockTable
-
         new_headers = [str(i) for i in range(len(self._rows))]
         new_rows: list[dict[str, str]] = []
 
@@ -211,7 +210,7 @@ class TableWrapper:
                 row_dict[str(row_idx)] = row.get(header, "")
             new_rows.append(row_dict)
 
-        mock = MockTable(
+        mock = SimpleTable(
             headings=["_column"] + new_headers,
             rows_data=new_rows,
         )

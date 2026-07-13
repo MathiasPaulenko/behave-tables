@@ -1,4 +1,4 @@
-"""Internal mock table for transpose() and testing.
+"""Internal table implementation for transpose() and testing.
 
 This module provides minimal implementations of the table and row
 protocols so that ``TableWrapper`` can be constructed without a real
@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 
 
 @dataclass
-class MockRow:
+class SimpleRow:
     """A minimal row implementation compatible with ``TableWrapper``.
 
     Attributes:
@@ -45,7 +45,7 @@ class MockRow:
 
 
 @dataclass
-class MockTable:
+class SimpleTable:
     """A minimal table implementation compatible with ``TableWrapper``.
 
     Attributes:
@@ -57,10 +57,10 @@ class MockTable:
     rows_data: list[dict[str, str]] = field(default_factory=list)
 
     @property
-    def rows(self) -> list[MockRow]:
-        """Return all rows as ``MockRow`` instances.
+    def rows(self) -> list[SimpleRow]:
+        """Return all rows as ``SimpleRow`` instances.
 
         Returns:
-            A list of ``MockRow`` objects, one per entry in ``rows_data``.
+            A list of ``SimpleRow`` objects, one per entry in ``rows_data``.
         """
-        return [MockRow(d) for d in self.rows_data]
+        return [SimpleRow(d) for d in self.rows_data]

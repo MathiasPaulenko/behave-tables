@@ -1,8 +1,11 @@
-"""Test helpers — mock behave Table and Row objects."""
+"""Shared test fixtures — mock behave Table and Row objects."""
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
+
+import pytest
 
 
 @dataclass
@@ -32,9 +35,15 @@ class FakeTable:
         return [FakeRow(cells=c, headings=self.headings) for c in self.rows_cells]
 
 
-def make_table(
+def _make_table(
     headings: list[str],
     rows: list[list[str]],
 ) -> FakeTable:
     """Build a FakeTable for testing."""
     return FakeTable(headings=headings, rows_cells=rows)
+
+
+@pytest.fixture
+def make_table() -> Callable[[list[str], list[list[str]]], FakeTable]:
+    """Return a factory that builds FakeTable instances."""
+    return _make_table

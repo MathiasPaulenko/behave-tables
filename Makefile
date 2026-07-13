@@ -1,4 +1,4 @@
-.PHONY: install dev lint test test-cov clean build
+.PHONY: install dev lint lint-fix format test test-cov clean build
 
 install:
 	pip install -e .
@@ -11,6 +11,9 @@ lint:
 
 lint-fix:
 	ruff check . --fix
+
+format:
+	ruff format .
 
 test:
 	pytest tests/ -v

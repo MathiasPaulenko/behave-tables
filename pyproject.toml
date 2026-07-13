@@ -54,6 +54,10 @@ select = ["E", "F", "W", "I", "N", "UP", "B", "SIM"]
 [tool.ruff.lint.isort]
 known-first-party = ["behave_tables"]
 
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"

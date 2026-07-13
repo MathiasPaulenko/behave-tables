@@ -24,3 +24,7 @@ class ColumnMismatchError(ValueError):
         super().__init__("; ".join(parts) or "no column mismatch")
         self.missing = missing
         self.extra = extra or []
+
+    def __repr__(self) -> str:
+        """Return an unambiguous string representation of the error."""
+        return f"ColumnMismatchError(missing={self.missing!r}, extra={self.extra!r})"

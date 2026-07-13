@@ -28,3 +28,10 @@ class TestColumnMismatchError:
         assert "no column mismatch" in str(err)
         assert err.missing == []
         assert err.extra == []
+
+    def test_repr(self):
+        err = ColumnMismatchError(missing=["name"], extra=["extra"])
+        r = repr(err)
+        assert "ColumnMismatchError" in r
+        assert "missing" in r
+        assert "extra" in r
