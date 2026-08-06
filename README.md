@@ -44,6 +44,7 @@ pip install behave-tables[pydantic]
 ```python
 from behave_tables import TableWrapper, wrap
 
+
 @then("the users should be")
 def step_impl(context):
     table = wrap(context.table)
@@ -96,9 +97,9 @@ def step_impl(context):
     for row in table:
         print(row["name"])
 
-    table[0]     # {"name": "Alice", "age": "30"}
-    table[0:2]   # [{"name": "Alice", "age": "30"}, {"name": "Bob", "age": "25"}]
-    len(table)   # 2
+    table[0]  # {"name": "Alice", "age": "30"}
+    table[0:2]  # [{"name": "Alice", "age": "30"}, {"name": "Bob", "age": "25"}]
+    len(table)  # 2
 
     # Compare and check membership
     assert table == wrap(other_table)
@@ -164,7 +165,7 @@ try:
     table.validate_columns("name", strict=True)
 except ColumnMismatchError as e:
     print(e.missing)  # []
-    print(e.extra)   # ["age", "email"]
+    print(e.extra)  # ["age", "email"]
 ```
 
 ---
@@ -176,10 +177,12 @@ except ColumnMismatchError as e:
 ```python
 from dataclasses import dataclass
 
+
 @dataclass
 class User:
     name: str
     age: int
+
 
 @then("the users should be")
 def step_impl(context):
@@ -192,9 +195,11 @@ def step_impl(context):
 ```python
 from pydantic import BaseModel
 
+
 class User(BaseModel):
     name: str
     age: int
+
 
 @then("the users should be")
 def step_impl(context):
@@ -211,6 +216,7 @@ def step_impl(context):
     table = wrap(context.table)
     table.validate_columns("name", "email", "role")
     # Proceed with confidence that columns exist
+
 
 # Strict mode: ensure no extra columns
 @then("the user list has exactly these columns")
@@ -265,6 +271,7 @@ def step_impl(context):
     csv_output = table.to_csv(delimiter=";")
     json_output = table.to_json(indent=4, sort_keys=True)
     jsonl_output = table.to_jsonl()  # one JSON object per line
+
 
 # Round-trip: export then re-import
 restored = TableWrapper.from_csv(csv_output)
