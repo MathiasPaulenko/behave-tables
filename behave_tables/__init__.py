@@ -16,7 +16,7 @@ from __future__ import annotations
 from .exceptions import ColumnMismatchError
 from .wrapper import TableLike, TableWrapper
 
-__version__ = "1.3.2"
+__version__ = "1.4.0"
 
 __all__ = ["TableWrapper", "wrap", "ColumnMismatchError", "TableLike", "__version__"]
 
