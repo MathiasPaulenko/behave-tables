@@ -47,6 +47,12 @@ class TestSelect:
         with pytest.raises(KeyError, match="not found"):
             wt.select("name", "email")
 
+    def test_duplicate_column_raises(self, make_table):
+        table = make_table(["a", "b"], [["1", "2"]])
+        wt = wrap(table)
+        with pytest.raises(ValueError, match="Duplicate"):
+            wt.select("a", "a")
+
     def test_empty_selection(self, make_table):
         table = make_table(["name"], [["Alice"]])
         wt = wrap(table)
@@ -127,6 +133,25 @@ class TestRenameColumns:
         wt = wrap(table)
         with pytest.raises(KeyError, match="not found"):
             wt.rename_columns({"email": "e"})
+
+    def test_rename_to_existing_column_raises(self, make_table):
+        table = make_table(["a", "b"], [["1", "2"]])
+        wt = wrap(table)
+        with pytest.raises(ValueError, match="duplicate"):
+            wt.rename_columns({"a": "b"})
+
+    def test_rename_two_columns_to_same_name_raises(self, make_table):
+        table = make_table(["a", "b"], [["1", "2"]])
+        wt = wrap(table)
+        with pytest.raises(ValueError, match="duplicate"):
+            wt.rename_columns({"a": "x", "b": "x"})
+
+    def test_rename_swap(self, make_table):
+        table = make_table(["a", "b"], [["1", "2"]])
+        wt = wrap(table)
+        result = wt.rename_columns({"a": "b", "b": "a"})
+        assert result.headers == ["b", "a"]
+        assert result.as_dicts() == [{"b": "1", "a": "2"}]
 
     def test_empty_mapping(self, make_table):
         table = make_table(["name"], [["Alice"]])
@@ -394,6 +419,14 @@ class TestFromCsv:
         assert wt.headers == ["name", "age"]
         assert len(wt) == 0
 
+    def test_short_row_filled_with_empty(self):
+        wt = TableWrapper.from_csv("a,b\n1\n")
+        assert wt.as_dicts() == [{"a": "1", "b": ""}]
+
+    def test_extra_fields_ignored(self):
+        wt = TableWrapper.from_csv("a\n1,EXTRA\n")
+        assert wt.as_dicts() == [{"a": "1"}]
+
     def test_round_trip(self, make_table):
         table = make_table(["name", "age"], [["Alice", "30"], ["Bob", "25"]])
         wt = wrap(table)
@@ -444,6 +477,23 @@ class TestFromJson:
         assert wt.headers == ["a", "b", "c"]
         assert wt[0] == {"a": "1", "b": "2"}
         assert wt[1] == {"a": "1", "c": "3"}
+
+    def test_heterogeneous_column_returns_empty_for_missing(self):
+        wt = TableWrapper.from_json('[{"a": "1", "b": "2"}, {"a": "1", "c": "3"}]')
+        assert wt.column("b") == ["2", ""]
+        assert wt.column("c") == ["", "3"]
+
+    def test_non_string_values_coerced(self):
+        wt = TableWrapper.from_json(
+            '[{"n": 30, "ok": true, "x": null, "items": [1, 2], "s": "hi"}]'
+        )
+        assert wt[0] == {
+            "n": "30",
+            "ok": "true",
+            "x": "null",
+            "items": "[1, 2]",
+            "s": "hi",
+        }
 
     def test_round_trip_jsonl(self, make_table):
         table = make_table(["name", "age"], [["Alice", "30"], ["Bob", "25"]])

@@ -59,6 +59,13 @@ class TestColumn:
         wt = wrap(table)
         assert wt.column("name") == []
 
+    def test_missing_value_in_row(self):
+        from behave_tables._table_impl import SimpleTable
+
+        mock = SimpleTable(headings=["a", "b"], rows_data=[{"a": "1"}])
+        wt = wrap(mock)
+        assert wt.column("b") == [""]
+
 
 class TestFindRow:
     def test_single_filter(self, make_table):
@@ -243,6 +250,17 @@ class TestToCsv:
         lines = csv_str.split("\n")
         assert lines[0] == "name;age"
         assert lines[1] == "Alice;30"
+
+    def test_crlf_in_value_preserved(self):
+        from behave_tables import TableWrapper
+        from behave_tables._table_impl import SimpleTable
+
+        mock = SimpleTable(headings=["name"], rows_data=[{"name": "a\r\nb"}])
+        wt = wrap(mock)
+        csv_str = wt.to_csv()
+        assert '"a\r\nb"' in csv_str
+        restored = TableWrapper.from_csv(csv_str)
+        assert restored.as_dicts() == [{"name": "a\r\nb"}]
 
     def test_quoting_all(self, make_table):
         import csv as csv_module
@@ -700,3 +718,31 @@ class TestEdgeCases:
         wt = wrap(table)
         with pytest.raises(TypeError, match="unhashable"):
             hash(wt)
+
+
+class TestRealBehaveTable:
+    """Integration tests against a real behave.model.Table."""
+
+    def test_wrap_real_table(self):
+        pytest.importorskip("behave")
+        from behave.model import Table
+
+        table = Table(["name", "age"], [["Alice", "30"], ["Bob", "25"]])
+        wt = wrap(table)
+        assert wt.as_dicts() == [
+            {"name": "Alice", "age": "30"},
+            {"name": "Bob", "age": "25"},
+        ]
+        assert wt.headers == ["name", "age"]
+        assert wt.column("name") == ["Alice", "Bob"]
+
+    def test_operations_on_real_table(self):
+        pytest.importorskip("behave")
+        from behave.model import Table
+
+        table = Table(["name", "age"], [["Alice", "30"], ["Bob", "25"]])
+        wt = wrap(table)
+        assert wt.find_row(name="Bob") == {"name": "Bob", "age": "25"}
+        assert wt.select("name").headers == ["name"]
+        assert wt.sort("age").as_dicts()[0]["name"] == "Bob"
+        assert wt.count() == 2

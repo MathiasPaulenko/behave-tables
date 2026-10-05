@@ -133,7 +133,7 @@ class TableWrapper:
         """
         if name not in self._table.headings:
             raise KeyError(f"Column {name!r} not found. Available: {self._table.headings}")
-        return [row[name] for row in self._rows]
+        return [row.get(name, "") for row in self._rows]
 
     def find_row(self, **filters: str) -> dict[str, str] | None:
         """Return the first row matching all filters, or ``None``.
@@ -238,16 +238,17 @@ class TableWrapper:
             extrasaction="ignore",
             delimiter=delimiter,
             quoting=quoting,
+            lineterminator="\n",
         )
         writer.writeheader()
         writer.writerows(self._rows)
-        return output.getvalue().replace("\r\n", "\n").rstrip("\n")
+        return output.getvalue().removesuffix("\n")
 
     def to_json(
         self,
         indent: int | None = 2,
         sort_keys: bool = False,
-        default: Any = None,
+        default: Callable[[Any], Any] | None = None,
     ) -> str:
         """Return the table as a JSON string (list of objects).
 
@@ -282,11 +283,15 @@ class TableWrapper:
 
         Raises:
             KeyError: If any column does not exist in the table.
+            ValueError: If a column is requested more than once.
         """
         headings = self._table.headings
         for col in columns:
             if col not in headings:
                 raise KeyError(f"Column {col!r} not found. Available: {headings}")
+        if len(set(columns)) != len(columns):
+            dupes = sorted({c for c in columns if columns.count(c) > 1})
+            raise ValueError(f"Duplicate columns requested: {dupes}")
         new_rows = [{col: row.get(col, "") for col in columns} for row in self._rows]
         return TableWrapper(SimpleTable(headings=list(columns), rows_data=new_rows))
 
@@ -321,12 +326,16 @@ class TableWrapper:
 
         Raises:
             KeyError: If any old column name does not exist.
+            ValueError: If the mapping would produce duplicate columns.
         """
         headings = self._table.headings
         for old in mapping:
             if old not in headings:
                 raise KeyError(f"Column {old!r} not found. Available: {headings}")
         new_headings = [mapping.get(h, h) for h in headings]
+        if len(set(new_headings)) != len(new_headings):
+            dupes = sorted({h for h in new_headings if new_headings.count(h) > 1})
+            raise ValueError(f"Renaming would produce duplicate columns: {dupes}")
         new_rows = [{mapping.get(k, k): v for k, v in row.items()} for row in self._rows]
         return TableWrapper(SimpleTable(headings=new_headings, rows_data=new_rows))
 
@@ -438,6 +447,9 @@ class TableWrapper:
     def from_csv(cls, csv_string: str, delimiter: str = ",") -> TableWrapper:
         """Create a ``TableWrapper`` from a CSV string.
 
+        Missing fields in a row are filled with empty strings; extra
+        fields beyond the header are ignored (mirroring ``to_csv()``).
+
         Args:
             csv_string: A CSV-formatted string with a header row.
             delimiter: Column separator character (default ``,``).
@@ -445,9 +457,9 @@ class TableWrapper:
         Returns:
             A new ``TableWrapper`` instance.
         """
-        reader = csv.DictReader(io.StringIO(csv_string), delimiter=delimiter)
+        reader = csv.DictReader(io.StringIO(csv_string), delimiter=delimiter, restval="")
         headings = list(reader.fieldnames or [])
-        rows_data = [dict(row) for row in reader]
+        rows_data = [{k: v for k, v in row.items() if k is not None} for row in reader]
         return cls(SimpleTable(headings=headings, rows_data=rows_data))
 
     @classmethod
@@ -456,7 +468,9 @@ class TableWrapper:
 
         The JSON must be a list of objects (as produced by ``to_json()``).
         Column names are inferred from the union of all object keys,
-        preserving first-seen order.
+        preserving first-seen order. Non-string values are converted to
+        their JSON representation (e.g. ``30`` → ``"30"``,
+        ``true`` → ``"true"``).
 
         Args:
             json_string: A JSON-formatted string representing a list
@@ -477,7 +491,13 @@ class TableWrapper:
                 if key not in seen:
                     seen.add(key)
                     headings.append(key)
-        rows_data = [dict(row) for row in data]
+        rows_data = [
+            {
+                k: v if isinstance(v, str) else json.dumps(v, ensure_ascii=False)
+                for k, v in row.items()
+            }
+            for row in data
+        ]
         return cls(SimpleTable(headings=headings, rows_data=rows_data))
 
     def __iter__(self) -> Iterator[dict[str, str]]:
