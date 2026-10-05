@@ -79,7 +79,7 @@ def step_impl(context):
     selected = table.select("name", "age")
     cleaned = table.drop("internal_id")
     renamed = table.rename_columns({"name": "full_name"})
-    sorted_wt = table.sort("age", reverse=True)
+    sorted_t = table.sort("age", reverse=True)
     deduped = table.distinct()
 
     # Query
@@ -101,7 +101,7 @@ def step_impl(context):
     table[0:2]  # [{"name": "Alice", "age": "30"}, {"name": "Bob", "age": "25"}]
     len(table)  # 2
 
-    # Compare and check membership
+    # Compare and check membership (other_table = another behave Table)
     assert table == wrap(other_table)
     assert {"name": "Alice", "age": "30"} in table
 ```
@@ -128,17 +128,17 @@ Wrap a `behave.model.Table` (or any table-like object) with `TableWrapper`.
 | `to_csv(delimiter=",", quoting=QUOTE_MINIMAL)` | `str` | CSV string with configurable delimiter and quoting |
 | `to_json(indent=2, sort_keys=False, default=None)` | `str` | JSON string (list of objects) |
 | `to_jsonl()` | `str` | JSON Lines string (one object per line) |
-| `select(*columns)` | `TableWrapper` | New wrapper with only the specified columns |
+| `select(*columns)` | `TableWrapper` | New wrapper with only the specified columns (`ValueError` on duplicates) |
 | `drop(*columns)` | `TableWrapper` | New wrapper without the specified columns |
-| `rename_columns(mapping)` | `TableWrapper` | New wrapper with renamed columns |
+| `rename_columns(mapping)` | `TableWrapper` | New wrapper with renamed columns (`ValueError` if names collide) |
 | `sort(key, reverse=False)` | `TableWrapper` | New wrapper with rows sorted by column or callable |
 | `unique(column)` | `list[str]` | Unique values for a column (first-seen order) |
 | `distinct()` | `TableWrapper` | New wrapper with duplicate rows removed |
 | `count(**filters)` | `int` | Count rows matching all filters |
 | `first()` | `dict[str, str] \| None` | First row as dict copy, or `None` if empty |
 | `last()` | `dict[str, str] \| None` | Last row as dict copy, or `None` if empty |
-| `from_csv(csv_string, delimiter=",")` | `TableWrapper` | Classmethod: create wrapper from CSV string |
-| `from_json(json_string)` | `TableWrapper` | Classmethod: create wrapper from JSON string |
+| `from_csv(csv_string, delimiter=",")` | `TableWrapper` | Classmethod: create wrapper from CSV (missing fields → `""`, extras ignored) |
+| `from_json(json_string)` | `TableWrapper` | Classmethod: create wrapper from JSON (non-string values coerced to JSON text) |
 | `headers` | `list[str]` | Column names |
 | `__iter__` | `Iterator[dict]` | Iterate rows as dicts |
 | `__getitem__(i)` | `dict[str, str] \| list[dict[str, str]]` | Row at index as dict, or list of dicts for a slice |
@@ -146,6 +146,7 @@ Wrap a `behave.model.Table` (or any table-like object) with `TableWrapper`.
 | `__eq__` | `bool` | Compare by headers and rows |
 | `__contains__` | `bool` | Check if a row dict is present |
 | `__repr__` | `str` | Unambiguous representation |
+| `__hash__` | — | Unhashable by design (raises `TypeError`) |
 
 ### `ColumnMismatchError`
 
@@ -165,8 +166,10 @@ try:
     table.validate_columns("name", strict=True)
 except ColumnMismatchError as e:
     print(e.missing)  # []
-    print(e.extra)  # ["age", "email"]
+    print(e.extra)  # ["age"]
 ```
+
+The package version is exposed as `behave_tables.__version__`, and `TableLike` is the `Protocol` accepted by `wrap()`/`TableWrapper` for non-`behave` table objects.
 
 ---
 
@@ -318,6 +321,7 @@ def step_impl(context):
 ## Development
 
 ```bash
+make install        # install package in editable mode
 make dev            # install with dev dependencies
 make test           # run tests
 make test-cov       # run tests with coverage
@@ -325,6 +329,8 @@ make lint           # check code style
 make lint-fix       # auto-fix lint issues
 make format         # format code with ruff
 make format-check   # verify code is formatted
+make build          # build sdist and wheel into dist/
+make clean          # remove build artifacts and caches
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for details.

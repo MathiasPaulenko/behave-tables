@@ -2,6 +2,42 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- `column()` no longer raises `KeyError` on rows missing a value for a valid
+  header (e.g. tables built by `from_json()` with heterogeneous objects);
+  missing values now return `""`, consistent with `unique()`, `sort()` and
+  `to_csv()`
+- `from_csv()` fills short rows with `""` instead of `None` and ignores extra
+  fields instead of storing them under a `None` key
+- `to_csv()` no longer corrupts CRLF characters embedded in cell values
+  (uses `lineterminator="\n"` instead of post-processing the output)
+- `rename_columns()` raises `ValueError` when the mapping would produce
+  duplicate column names (previously caused silent data loss)
+- `select()` raises `ValueError` when a column is requested more than once
+- `from_json()` coerces non-string values to their JSON representation,
+  keeping the `dict[str, str]` row invariant
+- `to_json()` `default` parameter is now typed as `Callable | None`
+- Release workflow: changelog extraction now matches version headers
+  literally (was a broken regex match, producing empty release notes)
+- CI: coverage `fail_under` is now actually enforced via `--cov-report=term-missing`
+- CI: bumped `codecov-action` to v5
+
+### Changed
+
+- Removed deprecated `License ::` classifier (PEP 639: redundant with
+  SPDX `license` field)
+- `build` added to dev dependencies so `make build` works on a fresh dev setup
+- README: reformatted for ruff 0.16 compatibility
+
+## [1.3.2] - 2026-08-06
+
+### Fixed
+
+- Added author email to `pyproject.toml`
+
 ## [1.3.1] - 2026-07-13
 
 ### Added
