@@ -53,7 +53,7 @@ jobs:
           VERSION="${TAG#v}"
           # Extract the section between [VERSION] and the next ## header
           BODY=$(awk -v ver="## [$VERSION]" '
-            $0 ~ ver {found=1; next}
+            index($0, ver) == 1 {found=1; next}
             /^## \[/ && found {exit}
             found {print}
           ' CHANGELOG.md)
