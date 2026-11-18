@@ -140,6 +140,8 @@ Wrap a `behave.model.Table` (or any table-like object) with `TableWrapper`.
 | `from_csv(csv_string, delimiter=",")` | `TableWrapper` | Classmethod: create wrapper from CSV (missing fields → `""`, extras ignored) |
 | `from_json(json_string)` | `TableWrapper` | Classmethod: create wrapper from JSON (non-string values coerced to JSON text) |
 | `headers` | `list[str]` | Column names |
+| `headings` | `list[str]` | Alias of `headers` for `TableLike` conformance (enables `wrap(wrapper)`) |
+| `rows` | `list[SimpleRow]` | Rows as `TableLike`-compatible row objects (enables `wrap(wrapper)`) |
 | `__iter__` | `Iterator[dict]` | Iterate rows as dicts |
 | `__getitem__(i)` | `dict[str, str] \| list[dict[str, str]]` | Row at index as dict, or list of dicts for a slice |
 | `__len__` | `int` | Number of rows |

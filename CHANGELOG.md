@@ -2,6 +2,52 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- `wrap()` raises a clear `TypeError` for inputs lacking `headings`/`rows`
+  (e.g. `None`, ints, strings, dicts) instead of leaking `AttributeError`
+- `wrap()` accepts a `TableWrapper` directly (it now satisfies the
+  `TableLike` protocol via `headings`/`rows` properties)
+- Headings are snapshotted at construction: mutating the source table's
+  headings afterwards no longer desynchronizes the wrapper
+- Row extraction now supports positional `list`/`tuple` rows and fills
+  missing cells with `""`; every row is normalized to the table's
+  headings regardless of row type (`as_dict`, dict, sequence or
+  `__getitem__`), dropping keys that are not headings
+- `find_row()`, `find_all_rows()` and `count()` no longer match rows
+  when filtering by a key absent from the row (e.g. `bogus=None`), even
+  against objects with permissive `__eq__` such as `unittest.mock.ANY`;
+  `in`/`__contains__` likewise only accepts real dict rows
+- Non-string cell values are coerced to their JSON representation on
+  every row path (same rule as `from_json()`), restoring the documented
+  `dict[str, str]` invariant and preventing mutable objects from being
+  shared between wrapper internals and callers
+- `as_models()` works with dataclass fields declared `init=False`
+  (previously passed them to the constructor and crashed), ignores
+  `ClassVar` and `KW_ONLY` pseudo-fields even when a matching column
+  exists, and supports Pydantic `Field(alias=...)`/`AliasChoices`
+  (previously filtered out)
+- `sort()` raises `TypeError` for non-string, non-callable keys instead
+  of `KeyError`, and callable keys can no longer mutate internal rows
+- `from_csv()` raises `TypeError` for non-string input (previously
+  `None` silently produced an empty table), strips a leading UTF-8 BOM,
+  and ignores leading blank lines (previously all data was silently
+  discarded when the file started with an empty line)
+- `from_json()` raises `TypeError` for non-string input instead of
+  leaking `json.loads` errors
+- `rename_columns()` raises `TypeError` for non-mapping arguments
+  instead of `AttributeError`, and for non-string new column names
+  (which produced unreachable columns)
+- `validate_columns()` deduplicates repeated missing/extra columns in
+  the raised `ColumnMismatchError`
+- `ColumnMismatchError` defensively copies `missing`/`extra` and
+  survives `pickle` round-trips without corrupting its message
+- `select()`, `drop()`, `rename_columns()`, `sort()`, `transpose()`,
+  `from_csv()` and `from_json()` preserve subclasses (return
+  `type(self)`/`cls` instead of always `TableWrapper`)
+
 ## [1.4.0] - 2026-10-05
 
 ### Fixed
