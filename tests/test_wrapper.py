@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from behave_tables import ColumnMismatchError, wrap
+from behave_tables import ColumnMismatchError, TableWrapper, wrap
 
 
 class TestAsDicts:
@@ -746,3 +746,436 @@ class TestRealBehaveTable:
         assert wt.select("name").headers == ["name"]
         assert wt.sort("age").as_dicts()[0]["name"] == "Bob"
         assert wt.count() == 2
+
+
+class TestConstructionValidation:
+    def test_none_raises_type_error(self):
+        with pytest.raises(TypeError, match="headings.*rows"):
+            wrap(None)
+
+    def test_non_table_objects_raise(self):
+        for bad in (42, object(), {"headings": ["a"]}, "string"):
+            with pytest.raises(TypeError, match="headings.*rows"):
+                wrap(bad)
+
+    def test_missing_rows_attr_raises(self):
+        class NoRows:
+            headings = ["a"]
+
+        with pytest.raises(TypeError, match="headings.*rows"):
+            wrap(NoRows())
+
+    def test_missing_headings_attr_raises(self):
+        class NoHeadings:
+            rows = []
+
+        with pytest.raises(TypeError, match="headings.*rows"):
+            wrap(NoHeadings())
+
+    def test_string_headings_raises(self):
+        class StringHeadings:
+            headings = "name"
+            rows = []
+
+        with pytest.raises(TypeError, match="iterable of column names"):
+            wrap(StringHeadings())
+
+    def test_bytes_headings_raises(self):
+        class BytesHeadings:
+            headings = b"name"
+            rows = []
+
+        with pytest.raises(TypeError, match="iterable of column names"):
+            wrap(BytesHeadings())
+
+    def test_non_iterable_headings_raises(self):
+        class IntHeadings:
+            headings = 5
+            rows = []
+
+        with pytest.raises(TypeError, match="iterable of column names"):
+            wrap(IntHeadings())
+
+    def test_headings_generator_accepted(self):
+        class GenHeadings:
+            @property
+            def headings(self):
+                return iter(["a", "b"])
+
+            rows = []
+
+        wt = wrap(GenHeadings())
+        assert wt.headers == ["a", "b"]
+
+
+class TestTableLikeConformance:
+    def test_wrap_wrapper_round_trip(self, make_table):
+        wt = wrap(make_table(["name", "age"], [["Alice", "30"]]))
+        wrapped = wrap(wt)
+        assert wrapped == wt
+        assert wrapped.as_dicts() == wt.as_dicts()
+
+    def test_wrap_wrapper_heterogeneous_rows(self):
+        wt = TableWrapper.from_json('[{"a": "1"}, {"b": "2"}]')
+        assert wrap(wt) == wt
+
+    def test_headings_property(self, make_table):
+        wt = wrap(make_table(["a", "b"], []))
+        assert wt.headings == ["a", "b"]
+        assert wt.headings == wt.headers
+
+    def test_headings_returns_copy(self, make_table):
+        wt = wrap(make_table(["a"], []))
+        wt.headings.append("x")
+        assert wt.headings == ["a"]
+
+    def test_rows_property(self, make_table):
+        wt = wrap(make_table(["a", "b"], [["1", "2"]]))
+        rows = wt.rows
+        assert len(rows) == 1
+        assert rows[0].as_dict() == {"a": "1", "b": "2"}
+        assert rows[0]["a"] == "1"
+
+    def test_rows_property_returns_copies(self, make_table):
+        wt = wrap(make_table(["a"], [["1"]]))
+        wt.rows[0].as_dict()["a"] = "modified"
+        assert wt[0]["a"] == "1"
+
+
+class TestHeadingsSnapshot:
+    def test_appended_heading_does_not_desync(self):
+        from behave_tables._table_impl import SimpleTable
+
+        st = SimpleTable(headings=["a", "b"], rows_data=[{"a": "1", "b": "2"}])
+        wt = wrap(st)
+        st.headings.append("c")
+        assert wt.headers == ["a", "b"]
+        with pytest.raises(KeyError):
+            wt.column("c")
+
+    def test_replaced_heading_does_not_desync(self):
+        from behave_tables._table_impl import SimpleTable
+
+        st = SimpleTable(headings=["a"], rows_data=[{"a": "1"}])
+        wt = wrap(st)
+        st.headings[0] = "renamed"
+        assert wt.headers == ["a"]
+        assert wt.column("a") == ["1"]
+
+
+class TestRowTypeHandling:
+    def test_list_rows(self):
+        class PositionalTable:
+            headings = ["a", "b"]
+            rows = [["1", "2"]]
+
+        assert wrap(PositionalTable()).as_dicts() == [{"a": "1", "b": "2"}]
+
+    def test_tuple_rows(self):
+        class TupleTable:
+            headings = ["a", "b"]
+            rows = [("1", "2")]
+
+        assert wrap(TupleTable()).as_dicts() == [{"a": "1", "b": "2"}]
+
+    def test_positional_row_extra_cells_ignored(self):
+        class WideRows:
+            headings = ["a"]
+            rows = [["1", "extra", "more"]]
+
+        assert wrap(WideRows()).as_dicts() == [{"a": "1"}]
+
+    def test_positional_row_too_short_filled(self):
+        class ShortRows:
+            headings = ["a", "b", "c"]
+            rows = [["1"]]
+
+        assert wrap(ShortRows()).as_dicts() == [{"a": "1", "b": "", "c": ""}]
+
+    def test_as_dict_row_missing_key_filled(self):
+        class Row:
+            def as_dict(self):
+                return {"a": "1"}
+
+        class NarrowTable:
+            headings = ["a", "b"]
+            rows = [Row()]
+
+        assert wrap(NarrowTable()).as_dicts() == [{"a": "1", "b": ""}]
+
+    def test_as_dict_row_extra_key_dropped(self):
+        class Row:
+            def as_dict(self):
+                return {"a": "1", "rogue": "x"}
+
+        class ExtraTable:
+            headings = ["a", "b"]
+            rows = [Row()]
+
+        assert wrap(ExtraTable()).as_dicts() == [{"a": "1", "b": ""}]
+
+    def test_getitem_row_missing_key_filled(self):
+        class Row:
+            def __getitem__(self, key):
+                return {"a": "1"}[key]
+
+        class SparseGetitem:
+            headings = ["a", "b"]
+            rows = [Row()]
+
+        assert wrap(SparseGetitem()).as_dicts() == [{"a": "1", "b": ""}]
+
+    def test_getitem_row_index_or_value_error_filled(self):
+        class Row:
+            def __init__(self, exc):
+                self._exc = exc
+
+            def __getitem__(self, key):
+                if key == "b":
+                    raise self._exc
+                return "1"
+
+        for exc in (IndexError("no"), ValueError("no")):
+
+            class Sparse:
+                headings = ["a", "b"]
+                rows = [Row(exc)]
+
+            assert wrap(Sparse()).as_dicts() == [{"a": "1", "b": ""}]
+
+    def test_non_string_values_coerced_to_json(self):
+        class WideTable:
+            headings = ["i", "n", "b", "d", "l"]
+            rows = [{"i": 30, "n": None, "b": True, "d": {"x": 1}, "l": [1, 2]}]
+
+        assert wrap(WideTable()).as_dicts() == [
+            {"i": "30", "n": "null", "b": "true", "d": '{"x": 1}', "l": "[1, 2]"}
+        ]
+
+    def test_positional_row_non_string_values_coerced(self):
+        class PosTable:
+            headings = ["i", "b"]
+            rows = [[7, False]]
+
+        assert wrap(PosTable()).as_dicts() == [{"i": "7", "b": "false"}]
+
+    def test_as_dict_row_non_string_values_coerced(self):
+        class Row:
+            def as_dict(self):
+                return {"a": 1.5}
+
+        class FloatTable:
+            headings = ["a"]
+            rows = [Row()]
+
+        assert wrap(FloatTable()).as_dicts() == [{"a": "1.5"}]
+
+    def test_dict_row(self):
+        class DictTable:
+            headings = ["a", "b"]
+            rows = [{"a": "1", "b": "2"}]
+
+        assert wrap(DictTable()).as_dicts() == [{"a": "1", "b": "2"}]
+
+    def test_dict_row_missing_key_filled(self):
+        class SparseDicts:
+            headings = ["a", "b"]
+            rows = [{"a": "1"}]
+
+        assert wrap(SparseDicts()).as_dicts() == [{"a": "1", "b": ""}]
+
+    def test_str_row_raises(self):
+        class StrRows:
+            headings = ["a"]
+            rows = ["xy"]
+
+        with pytest.raises(TypeError, match="Unsupported row type"):
+            wrap(StrRows())
+
+    def test_bytes_row_raises(self):
+        class BytesRows:
+            headings = ["a"]
+            rows = [b"xy"]
+
+        with pytest.raises(TypeError, match="Unsupported row type"):
+            wrap(BytesRows())
+
+    def test_bytearray_row_raises(self):
+        class BytearrayRows:
+            headings = ["a"]
+            rows = [bytearray(b"xy")]
+
+        with pytest.raises(TypeError, match="Unsupported row type"):
+            wrap(BytearrayRows())
+
+    def test_row_with_non_callable_as_dict_falls_through(self):
+        class Row:
+            as_dict = "not callable"
+
+            def __getitem__(self, key):
+                return {"a": "1"}[key]
+
+        class WeirdTable:
+            headings = ["a"]
+            rows = [Row()]
+
+        assert wrap(WeirdTable()).as_dicts() == [{"a": "1"}]
+
+
+class TestFilterAbsentKeys:
+    def test_find_row_absent_key_never_matches(self, make_table):
+        wt = wrap(make_table(["a"], [["1"]]))
+        assert wt.find_row(bogus=None) is None
+
+    def test_find_row_none_value_no_match(self, make_table):
+        wt = wrap(make_table(["a"], [["1"]]))
+        assert wt.find_row(a=None) is None
+
+    def test_find_all_rows_absent_key(self, make_table):
+        wt = wrap(make_table(["a"], [["1"]]))
+        assert wt.find_all_rows(bogus=None) == []
+
+    def test_count_absent_key(self, make_table):
+        wt = wrap(make_table(["a"], [["1"]]))
+        assert wt.count(bogus=None) == 0
+
+    def test_permissive_eq_object_does_not_match_absent_key(self, make_table):
+        from unittest.mock import ANY
+
+        wt = wrap(make_table(["a"], [["1"]]))
+        assert wt.find_row(bogus=ANY) is None
+        assert wt.find_all_rows(bogus=ANY) == []
+        assert wt.count(bogus=ANY) == 0
+        assert ANY not in wt
+        # but a wildcard still matches an existing column
+        assert wt.find_row(a=ANY) == {"a": "1"}
+        assert {"a": ANY} in wt
+
+    def test_find_row_heterogeneous_missing_key(self):
+        wt = TableWrapper.from_json('[{"a": "1"}, {"a": "2", "b": "3"}]')
+        assert wt.find_row(b="3") == {"a": "2", "b": "3"}
+        assert wt.find_row(b="9") is None
+
+
+class TestSubclassPropagation:
+    def test_transform_methods_return_subclass(self):
+        from behave_tables._table_impl import SimpleTable
+
+        class Sub(TableWrapper):
+            pass
+
+        s = Sub(SimpleTable(headings=["a", "b"], rows_data=[{"a": "1", "b": "2"}]))
+        for transformed in (
+            s.select("a"),
+            s.drop("b"),
+            s.rename_columns({"a": "z"}),
+            s.sort("a"),
+            s.distinct(),
+            s.transpose(),
+        ):
+            assert type(transformed) is Sub
+
+    def test_from_methods_return_subclass(self):
+        class Sub(TableWrapper):
+            pass
+
+        assert type(Sub.from_csv("a\n1")) is Sub
+        assert type(Sub.from_json('[{"a": "1"}]')) is Sub
+
+
+class TestSortKeyValidation:
+    def test_non_str_non_callable_raises(self, make_table):
+        wt = wrap(make_table(["a"], [["1"]]))
+        for bad in (123, None, ["a"], {"x": 1}):
+            with pytest.raises(TypeError, match="column name or a callable"):
+                wt.sort(bad)
+
+    def test_missing_str_column_still_key_error(self, make_table):
+        wt = wrap(make_table(["a"], [["1"]]))
+        with pytest.raises(KeyError, match="not found"):
+            wt.sort("missing")
+
+    def test_callable_key_cannot_mutate_internal_rows(self, make_table):
+        wt = wrap(make_table(["a"], [["1"], ["2"]]))
+
+        def mutating_key(row):
+            row["a"] = "corrupted"
+            return row["a"]
+
+        wt.sort(key=mutating_key)
+        assert wt.as_dicts() == [{"a": "1"}, {"a": "2"}]
+
+
+class TestRenameMappingValidation:
+    def test_non_mapping_raises(self, make_table):
+        wt = wrap(make_table(["a"], [["1"]]))
+        for bad in (["a"], "a", 5, None):
+            with pytest.raises(TypeError, match="mapping"):
+                wt.rename_columns(bad)
+
+    def test_custom_mapping_accepted(self, make_table):
+        from collections import UserDict
+
+        wt = wrap(make_table(["a"], [["1"]]))
+        result = wt.rename_columns(UserDict({"a": "z"}))
+        assert result.headers == ["z"]
+
+    def test_non_string_new_name_raises(self, make_table):
+        wt = wrap(make_table(["a"], [["1"]]))
+        for bad_new in (None, 5, ["x"], b"x"):
+            with pytest.raises(TypeError, match="must be strings"):
+                wt.rename_columns({"a": bad_new})
+
+    def test_non_str_new_name_takes_priority_over_missing_old(self, make_table):
+        wt = wrap(make_table(["a"], [["1"]]))
+        with pytest.raises(KeyError, match="not found"):
+            wt.rename_columns({"missing": "x"})
+
+
+class TestFromCsvValidation:
+    def test_non_string_raises(self):
+        for bad in (None, b"a,b\n1,2", 123, ["a"]):
+            with pytest.raises(TypeError, match="csv_string"):
+                TableWrapper.from_csv(bad)
+
+    def test_bom_stripped(self):
+        wt = TableWrapper.from_csv("\ufeffa,b\n1,2")
+        assert wt.headers == ["a", "b"]
+        assert wt.as_dicts() == [{"a": "1", "b": "2"}]
+
+    def test_leading_blank_lines_ignored(self):
+        for prefix in ("\n", "\r\n", "\n\n", "\r\n\r\n"):
+            wt = TableWrapper.from_csv(prefix + "a,b\n1,2")
+            assert wt.headers == ["a", "b"]
+            assert wt.as_dicts() == [{"a": "1", "b": "2"}]
+
+
+class TestFromJsonValidation:
+    def test_non_string_raises(self):
+        for bad in (None, b'[{"a": "1"}]', 123, [{"a": "1"}]):
+            with pytest.raises(TypeError, match="json_string"):
+                TableWrapper.from_json(bad)
+
+
+class TestValidateColumnsDedup:
+    def test_duplicate_missing_deduped(self, make_table):
+        wt = wrap(make_table(["a"], []))
+        with pytest.raises(ColumnMismatchError) as exc_info:
+            wt.validate_columns("q", "q", "r")
+        assert exc_info.value.missing == ["q", "r"]
+
+    def test_duplicate_extra_deduped(self):
+        from behave_tables._table_impl import SimpleTable
+
+        st = SimpleTable(headings=["a", "a"], rows_data=[{"a": "1"}])
+        wt = wrap(st)
+        with pytest.raises(ColumnMismatchError) as exc_info:
+            wt.validate_columns(strict=True)
+        assert exc_info.value.extra == ["a"]
+
+
+class TestContainsNonDict:
+    def test_non_dict_items_not_contained(self, make_table):
+        wt = wrap(make_table(["a"], [["1"]]))
+        for item in ("x", 42, None, ["a"], ("a",)):
+            assert item not in wt

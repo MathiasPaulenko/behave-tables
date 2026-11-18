@@ -32,5 +32,8 @@ def wrap(table: TableLike) -> TableWrapper:
 
     Returns:
         A ``TableWrapper`` instance ready to use.
+
+    Raises:
+        TypeError: If ``table`` lacks ``headings`` or ``rows``.
     """
     return TableWrapper(table)

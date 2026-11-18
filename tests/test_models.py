@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import pytest
 
@@ -169,3 +169,42 @@ class TestAsModelsEdgeCases:
         table = make_table(["name"], [])
         wt = wrap(table)
         assert wt.as_models(UserPyd) == []
+
+
+class TestAsModelsFieldFiltering:
+    def test_dataclass_init_false_column_ignored(self, make_table):
+        @dataclass
+        class WithComputed:
+            name: str
+            computed: str = field(init=False, default="derived")
+
+        table = make_table(["name", "computed"], [["Alice", "ignored"]])
+        wt = wrap(table)
+        models = wt.as_models(WithComputed)
+        assert models[0].name == "Alice"
+        assert models[0].computed == "derived"
+
+    def test_pydantic_alias_column(self, make_table):
+        pytest.importorskip("pydantic")
+        from pydantic import BaseModel, Field
+
+        class UserPyd(BaseModel):
+            name: str = Field(alias="user_name")
+
+        table = make_table(["user_name"], [["Alice"]])
+        wt = wrap(table)
+        users = wt.as_models(UserPyd)
+        assert users[0].name == "Alice"
+
+    def test_pydantic_field_and_alias_columns(self, make_table):
+        pytest.importorskip("pydantic")
+        from pydantic import BaseModel, ConfigDict, Field
+
+        class UserPyd(BaseModel):
+            model_config = ConfigDict(populate_by_name=True)
+            name: str = Field(alias="user_name")
+
+        by_field = wrap(make_table(["name"], [["Alice"]]))
+        by_alias = wrap(make_table(["user_name"], [["Bob"]]))
+        assert by_field.as_models(UserPyd)[0].name == "Alice"
+        assert by_alias.as_models(UserPyd)[0].name == "Bob"

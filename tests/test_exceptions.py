@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pickle
+
 from behave_tables import ColumnMismatchError
 
 
@@ -87,3 +89,48 @@ class TestColumnMismatchError:
     def test_extra_preserves_order(self):
         err = ColumnMismatchError(missing=[], extra=["z", "a"])
         assert err.extra == ["z", "a"]
+
+
+class TestColumnMismatchErrorPickle:
+    def test_pickle_round_trip(self):
+        err = ColumnMismatchError(missing=["a", "b"], extra=["z"])
+        restored = pickle.loads(pickle.dumps(err))
+        assert isinstance(restored, ColumnMismatchError)
+        assert restored.missing == ["a", "b"]
+        assert restored.extra == ["z"]
+        assert str(restored) == str(err)
+        assert repr(restored) == repr(err)
+
+    def test_pickle_missing_only(self):
+        err = ColumnMismatchError(missing=["x"])
+        restored = pickle.loads(pickle.dumps(err))
+        assert restored.missing == ["x"]
+        assert restored.extra == []
+        assert str(restored) == str(err)
+
+    def test_pickle_empty(self):
+        err = ColumnMismatchError(missing=[])
+        restored = pickle.loads(pickle.dumps(err))
+        assert restored.missing == []
+        assert str(restored) == str(err)
+
+
+class TestColumnMismatchErrorCopies:
+    def test_missing_list_copied(self):
+        src = ["a"]
+        err = ColumnMismatchError(missing=src)
+        src.append("mutated")
+        assert err.missing == ["a"]
+
+    def test_extra_list_copied(self):
+        src = ["x"]
+        err = ColumnMismatchError(missing=[], extra=src)
+        src.append("mutated")
+        assert err.extra == ["x"]
+
+    def test_tuple_converted_to_list(self):
+        err = ColumnMismatchError(missing=("a", "b"), extra=("c",))
+        assert err.missing == ["a", "b"]
+        assert err.extra == ["c"]
+        assert isinstance(err.missing, list)
+        assert isinstance(err.extra, list)

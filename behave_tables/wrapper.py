@@ -5,14 +5,19 @@ from __future__ import annotations
 import csv
 import io
 import json
-from collections.abc import Callable, Iterator
-from typing import Any, Protocol, TypeVar, overload
+from collections.abc import Callable, Iterator, Mapping
+from typing import Any, Protocol, Self, TypeVar, overload
 
-from ._table_impl import SimpleTable
+from ._table_impl import SimpleRow, SimpleTable
 from .converters import convert_row_to_model
 from .exceptions import ColumnMismatchError
 
 M = TypeVar("M")
+
+
+def _coerce_cell(value: Any) -> str:
+    """Normalize a cell value to ``str``, matching ``from_json`` rules."""
+    return value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
 
 
 class TableLike(Protocol):
@@ -36,7 +41,8 @@ class TableWrapper:
     ``as_dict()`` or ``__getitem__``).
 
     All public methods return copies of internal data to prevent
-    accidental mutation of wrapper state.
+    accidental mutation of wrapper state. Note that duplicate column
+    names collapse to the last occurrence, as rows are dicts.
 
     Example:
         >>> table = wrap(context.table)
@@ -47,34 +53,80 @@ class TableWrapper:
     def __init__(self, table: TableLike) -> None:
         """Initialize the wrapper and extract rows from the table.
 
+        Headings are snapshot at construction, so mutating the source
+        table afterwards does not affect the wrapper.
+
         Args:
             table: A table-like object with ``headings`` and ``rows``.
+
+        Raises:
+            TypeError: If ``table`` lacks ``headings`` or ``rows``, or
+                ``headings`` is not an iterable of column names.
         """
-        self._table = table
-        self._rows: list[dict[str, str]] = self._extract_rows(table)
+        if not hasattr(table, "headings") or not hasattr(table, "rows"):
+            raise TypeError(
+                f"table must have 'headings' and 'rows' attributes, got {type(table).__name__}"
+            )
+        headings = table.headings
+        if isinstance(headings, (str, bytes)):
+            raise TypeError(
+                f"table.headings must be an iterable of column names, got {type(headings).__name__}"
+            )
+        try:
+            self._headings: list[str] = list(headings)
+        except TypeError:
+            raise TypeError(
+                f"table.headings must be an iterable of column names, got {type(headings).__name__}"
+            ) from None
+        self._rows: list[dict[str, str]] = self._extract_rows(table, self._headings)
 
     @staticmethod
-    def _extract_rows(table: TableLike) -> list[dict[str, str]]:
+    def _extract_rows(table: TableLike, headings: list[str]) -> list[dict[str, str]]:
         """Extract rows as list of dicts from any table-like object.
 
-        Handles rows that expose ``as_dict()`` (behave.model.Row) or
-        support ``__getitem__`` with header names as keys.
+        Handles rows that expose ``as_dict()`` (behave.model.Row), plain
+        dicts, positional sequences (list/tuple), and objects supporting
+        ``__getitem__`` with header names as keys. Every row is normalized
+        to the table's headings: missing cells are filled with ``""``,
+        values under keys that are not headings are dropped, and
+        non-string values are coerced to their JSON representation
+        (same rule as ``from_json()``).
 
         Args:
-            table: A table-like object with ``headings`` and ``rows``.
+            table: A table-like object with a ``rows`` attribute.
+            headings: The snapshot column names to extract.
 
         Returns:
             A list of dicts mapping column names to string values.
 
         Raises:
-            TypeError: If a row has neither ``as_dict`` nor ``__getitem__``.
+            TypeError: If a row is a string/bytes object or has neither
+                ``as_dict`` nor ``__getitem__``.
         """
         rows: list[dict[str, str]] = []
         for row in table.rows:
-            if hasattr(row, "as_dict"):
-                rows.append(dict(row.as_dict()))
+            if callable(getattr(row, "as_dict", None)):
+                raw = dict(row.as_dict())
+                rows.append({h: _coerce_cell(raw.get(h, "")) for h in headings})
+            elif isinstance(row, dict):
+                rows.append({h: _coerce_cell(row.get(h, "")) for h in headings})
+            elif isinstance(row, (str, bytes, bytearray)):
+                raise TypeError(f"Unsupported row type: {type(row)!r}")
+            elif isinstance(row, (list, tuple)):
+                rows.append(
+                    {
+                        h: _coerce_cell(row[i]) if i < len(row) else ""
+                        for i, h in enumerate(headings)
+                    }
+                )
             elif hasattr(row, "__getitem__"):
-                rows.append({h: row[h] for h in table.headings})
+                extracted: dict[str, str] = {}
+                for h in headings:
+                    try:
+                        extracted[h] = _coerce_cell(row[h])
+                    except (KeyError, IndexError, ValueError):
+                        extracted[h] = ""
+                rows.append(extracted)
             else:
                 raise TypeError(f"Unsupported row type: {type(row)!r}")
         return rows
@@ -86,7 +138,29 @@ class TableWrapper:
         Returns:
             A list of column name strings.
         """
-        return list(self._table.headings)
+        return list(self._headings)
+
+    @property
+    def headings(self) -> list[str]:
+        """Return a copy of the column headers.
+
+        ``TableLike``-compatible alias of :attr:`headers`, so a
+        ``TableWrapper`` can itself be passed to ``wrap()``.
+
+        Returns:
+            A list of column name strings.
+        """
+        return list(self._headings)
+
+    @property
+    def rows(self) -> list[SimpleRow]:
+        """Return all rows as row-like objects (``TableLike``-compatible).
+
+        Returns:
+            A list of ``SimpleRow`` objects whose ``as_dict()`` yields a
+            copy of each row.
+        """
+        return [SimpleRow(dict(row)) for row in self._rows]
 
     def as_dicts(self) -> list[dict[str, str]]:
         """Return all rows as a list of dicts (copies).
@@ -131,15 +205,16 @@ class TableWrapper:
         Raises:
             KeyError: If the column does not exist in the table.
         """
-        if name not in self._table.headings:
-            raise KeyError(f"Column {name!r} not found. Available: {self._table.headings}")
+        if name not in self._headings:
+            raise KeyError(f"Column {name!r} not found. Available: {self._headings}")
         return [row.get(name, "") for row in self._rows]
 
     def find_row(self, **filters: str) -> dict[str, str] | None:
         """Return the first row matching all filters, or ``None``.
 
         If no filters are provided, returns the first row (or ``None``
-        if the table is empty).
+        if the table is empty). A filter never matches rows where the
+        key is absent.
 
         Args:
             **filters: Column-value pairs that must all match.
@@ -150,14 +225,15 @@ class TableWrapper:
         if not filters:
             return dict(self._rows[0]) if self._rows else None
         for row in self._rows:
-            if all(row.get(k) == v for k, v in filters.items()):
+            if all(k in row and row[k] == v for k, v in filters.items()):
                 return dict(row)
         return None
 
     def find_all_rows(self, **filters: str) -> list[dict[str, str]]:
         """Return all rows matching all filters (copies).
 
-        If no filters are provided, returns all rows.
+        If no filters are provided, returns all rows. A filter never
+        matches rows where the key is absent.
 
         Args:
             **filters: Column-value pairs that must all match.
@@ -167,7 +243,11 @@ class TableWrapper:
         """
         if not filters:
             return self.as_dicts()
-        return [dict(row) for row in self._rows if all(row.get(k) == v for k, v in filters.items())]
+        return [
+            dict(row)
+            for row in self._rows
+            if all(k in row and row[k] == v for k, v in filters.items())
+        ]
 
     def validate_columns(self, *expected: str, strict: bool = False) -> None:
         """Validate that expected columns exist in the table.
@@ -181,26 +261,30 @@ class TableWrapper:
             ColumnMismatchError: If any expected column is missing, or
                 (with ``strict=True``) if any unexpected column is present.
         """
-        headers = set(self._table.headings)
+        headers = set(self._headings)
         expected_set = set(expected)
-        missing = [col for col in expected if col not in headers]
-        extra = [col for col in self._table.headings if col not in expected_set] if strict else []
+        missing = list(dict.fromkeys(col for col in expected if col not in headers))
+        extra = (
+            list(dict.fromkeys(col for col in self._headings if col not in expected_set))
+            if strict
+            else []
+        )
         if missing or extra:
             raise ColumnMismatchError(missing=missing, extra=extra)
 
-    def transpose(self) -> TableWrapper:
+    def transpose(self) -> Self:
         """Return a new ``TableWrapper`` with rows and columns swapped.
 
         Original headers become the first column (``"_column"``) and
         original row indices become the new headers (``"0"``, ``"1"``, ...).
 
         Returns:
-            A new ``TableWrapper`` instance with the transposed data.
+            A new wrapper instance with the transposed data.
         """
         new_headers = [str(i) for i in range(len(self._rows))]
         new_rows: list[dict[str, str]] = []
 
-        for header in self.headers:
+        for header in self._headings:
             row_dict: dict[str, str] = {"_column": header}
             for row_idx, row in enumerate(self._rows):
                 row_dict[str(row_idx)] = row.get(header, "")
@@ -210,7 +294,7 @@ class TableWrapper:
             headings=["_column"] + new_headers,
             rows_data=new_rows,
         )
-        return TableWrapper(mock)
+        return type(self)(mock)
 
     def to_csv(
         self,
@@ -233,7 +317,7 @@ class TableWrapper:
         output = io.StringIO()
         writer = csv.DictWriter(
             output,
-            fieldnames=self.headers,
+            fieldnames=self._headings,
             restval="",
             extrasaction="ignore",
             delimiter=delimiter,
@@ -271,7 +355,7 @@ class TableWrapper:
             default=default,
         )
 
-    def select(self, *columns: str) -> TableWrapper:
+    def select(self, *columns: str) -> Self:
         """Return a new wrapper with only the specified columns.
 
         Args:
@@ -279,93 +363,113 @@ class TableWrapper:
                 column order.
 
         Returns:
-            A new ``TableWrapper`` with only the selected columns.
+            A new wrapper with only the selected columns.
 
         Raises:
             KeyError: If any column does not exist in the table.
             ValueError: If a column is requested more than once.
         """
-        headings = self._table.headings
         for col in columns:
-            if col not in headings:
-                raise KeyError(f"Column {col!r} not found. Available: {headings}")
+            if col not in self._headings:
+                raise KeyError(f"Column {col!r} not found. Available: {self._headings}")
         if len(set(columns)) != len(columns):
             dupes = sorted({c for c in columns if columns.count(c) > 1})
             raise ValueError(f"Duplicate columns requested: {dupes}")
         new_rows = [{col: row.get(col, "") for col in columns} for row in self._rows]
-        return TableWrapper(SimpleTable(headings=list(columns), rows_data=new_rows))
+        return type(self)(SimpleTable(headings=list(columns), rows_data=new_rows))
 
-    def drop(self, *columns: str) -> TableWrapper:
+    def drop(self, *columns: str) -> Self:
         """Return a new wrapper without the specified columns.
 
         Args:
             *columns: Column names to exclude.
 
         Returns:
-            A new ``TableWrapper`` with the remaining columns.
+            A new wrapper with the remaining columns.
 
         Raises:
             KeyError: If any column does not exist in the table.
         """
-        headings = self._table.headings
         for col in columns:
-            if col not in headings:
-                raise KeyError(f"Column {col!r} not found. Available: {headings}")
-        keep = [h for h in headings if h not in columns]
+            if col not in self._headings:
+                raise KeyError(f"Column {col!r} not found. Available: {self._headings}")
+        keep = [h for h in self._headings if h not in columns]
         new_rows = [{col: row.get(col, "") for col in keep} for row in self._rows]
-        return TableWrapper(SimpleTable(headings=keep, rows_data=new_rows))
+        return type(self)(SimpleTable(headings=keep, rows_data=new_rows))
 
-    def rename_columns(self, mapping: dict[str, str]) -> TableWrapper:
+    def rename_columns(self, mapping: Mapping[str, str]) -> Self:
         """Return a new wrapper with renamed columns.
 
         Args:
-            mapping: A dict mapping old column names to new names.
+            mapping: A mapping of old column names to new names.
 
         Returns:
-            A new ``TableWrapper`` with renamed columns.
+            A new wrapper with renamed columns.
 
         Raises:
+            TypeError: If ``mapping`` is not a mapping, or any new
+                column name is not a string.
             KeyError: If any old column name does not exist.
             ValueError: If the mapping would produce duplicate columns.
         """
-        headings = self._table.headings
-        for old in mapping:
-            if old not in headings:
-                raise KeyError(f"Column {old!r} not found. Available: {headings}")
-        new_headings = [mapping.get(h, h) for h in headings]
+        if not isinstance(mapping, Mapping):
+            raise TypeError(
+                "mapping must be a mapping of old to new column names, "
+                f"got {type(mapping).__name__}"
+            )
+        for old, new in mapping.items():
+            if old not in self._headings:
+                raise KeyError(f"Column {old!r} not found. Available: {self._headings}")
+            if not isinstance(new, str):
+                raise TypeError(
+                    f"new column names must be strings, got {type(new).__name__} for {old!r}"
+                )
+        new_headings = [mapping.get(h, h) for h in self._headings]
         if len(set(new_headings)) != len(new_headings):
             dupes = sorted({h for h in new_headings if new_headings.count(h) > 1})
             raise ValueError(f"Renaming would produce duplicate columns: {dupes}")
         new_rows = [{mapping.get(k, k): v for k, v in row.items()} for row in self._rows]
-        return TableWrapper(SimpleTable(headings=new_headings, rows_data=new_rows))
+        return type(self)(SimpleTable(headings=new_headings, rows_data=new_rows))
 
     def sort(
         self,
         key: str | Callable[[dict[str, str]], Any],
         reverse: bool = False,
-    ) -> TableWrapper:
+    ) -> Self:
         """Return a new wrapper with rows sorted by the given key.
+
+        Sorting is lexicographic since all values are strings; pass a
+        callable key (e.g. ``key=lambda r: int(r["age"])``) for numeric
+        or custom ordering.
 
         Args:
             key: A column name to sort by, or a callable that receives
-                a row dict and returns a sort key.
+                a copy of each row dict and returns a sort key.
             reverse: If ``True``, sort in descending order.
 
         Returns:
-            A new ``TableWrapper`` with sorted rows.
+            A new wrapper with sorted rows.
+
+        Raises:
+            TypeError: If ``key`` is neither a string nor a callable.
+            KeyError: If ``key`` is a column name that does not exist.
         """
         if callable(key):
             key_func: Callable[[dict[str, str]], Any] = key
         else:
-            if key not in self._table.headings:
-                raise KeyError(f"Column {key!r} not found. Available: {self._table.headings}")
+            if not isinstance(key, str):
+                raise TypeError(
+                    f"key must be a column name or a callable, got {type(key).__name__}"
+                )
+            if key not in self._headings:
+                raise KeyError(f"Column {key!r} not found. Available: {self._headings}")
             col_name = key
 
             def key_func(row: dict[str, str]) -> Any:
                 return row.get(col_name, "")
 
-        new_rows = sorted(self._rows, key=key_func, reverse=reverse)
-        return TableWrapper(SimpleTable(headings=list(self._table.headings), rows_data=new_rows))
+        new_rows = sorted((dict(row) for row in self._rows), key=key_func, reverse=reverse)
+        return type(self)(SimpleTable(headings=list(self._headings), rows_data=new_rows))
 
     def unique(self, column: str) -> list[str]:
         """Return unique values for a column, preserving first-seen order.
@@ -379,8 +483,8 @@ class TableWrapper:
         Raises:
             KeyError: If the column does not exist.
         """
-        if column not in self._table.headings:
-            raise KeyError(f"Column {column!r} not found. Available: {self._table.headings}")
+        if column not in self._headings:
+            raise KeyError(f"Column {column!r} not found. Available: {self._headings}")
         seen: set[str] = set()
         result: list[str] = []
         for row in self._rows:
@@ -390,11 +494,11 @@ class TableWrapper:
                 result.append(val)
         return result
 
-    def distinct(self) -> TableWrapper:
+    def distinct(self) -> Self:
         """Return a new wrapper with duplicate rows removed.
 
         Returns:
-            A new ``TableWrapper`` with only the first occurrence of
+            A new wrapper with only the first occurrence of
             each unique row.
         """
         seen: set[tuple[tuple[str, str], ...]] = set()
@@ -404,10 +508,12 @@ class TableWrapper:
             if row_tuple not in seen:
                 seen.add(row_tuple)
                 new_rows.append(dict(row))
-        return TableWrapper(SimpleTable(headings=list(self._table.headings), rows_data=new_rows))
+        return type(self)(SimpleTable(headings=list(self._headings), rows_data=new_rows))
 
     def count(self, **filters: str) -> int:
         """Count rows matching all filters without materializing them.
+
+        A filter never matches rows where the key is absent.
 
         Args:
             **filters: Column-value pairs that must all match.
@@ -417,7 +523,9 @@ class TableWrapper:
         """
         if not filters:
             return len(self._rows)
-        return sum(1 for row in self._rows if all(row.get(k) == v for k, v in filters.items()))
+        return sum(
+            1 for row in self._rows if all(k in row and row[k] == v for k, v in filters.items())
+        )
 
     def first(self) -> dict[str, str] | None:
         """Return the first row as a dict copy, or ``None`` if empty.
@@ -444,26 +552,37 @@ class TableWrapper:
         return "\n".join(json.dumps(row, ensure_ascii=False) for row in self.as_dicts())
 
     @classmethod
-    def from_csv(cls, csv_string: str, delimiter: str = ",") -> TableWrapper:
+    def from_csv(cls, csv_string: str, delimiter: str = ",") -> Self:
         """Create a ``TableWrapper`` from a CSV string.
 
         Missing fields in a row are filled with empty strings; extra
         fields beyond the header are ignored (mirroring ``to_csv()``).
+        A leading UTF-8 BOM and leading blank lines are stripped.
 
         Args:
             csv_string: A CSV-formatted string with a header row.
             delimiter: Column separator character (default ``,``).
 
         Returns:
-            A new ``TableWrapper`` instance.
+            A new wrapper instance.
+
+        Raises:
+            TypeError: If ``csv_string`` is not a string.
+            csv.Error: If a field exceeds the CSV field size limit.
         """
-        reader = csv.DictReader(io.StringIO(csv_string), delimiter=delimiter, restval="")
+        if not isinstance(csv_string, str):
+            raise TypeError(f"csv_string must be a string, got {type(csv_string).__name__}")
+        reader = csv.DictReader(
+            io.StringIO(csv_string.removeprefix("\ufeff").lstrip("\r\n")),
+            delimiter=delimiter,
+            restval="",
+        )
         headings = list(reader.fieldnames or [])
         rows_data = [{k: v for k, v in row.items() if k is not None} for row in reader]
         return cls(SimpleTable(headings=headings, rows_data=rows_data))
 
     @classmethod
-    def from_json(cls, json_string: str) -> TableWrapper:
+    def from_json(cls, json_string: str) -> Self:
         """Create a ``TableWrapper`` from a JSON string.
 
         The JSON must be a list of objects (as produced by ``to_json()``).
@@ -477,8 +596,16 @@ class TableWrapper:
                 of row objects.
 
         Returns:
-            A new ``TableWrapper`` instance.
+            A new wrapper instance.
+
+        Raises:
+            TypeError: If ``json_string`` is not a string or the JSON
+                is not a list of objects.
+            ValueError: If the input is not valid JSON
+                (``json.JSONDecodeError`` and subclasses).
         """
+        if not isinstance(json_string, str):
+            raise TypeError(f"json_string must be a string, got {type(json_string).__name__}")
         data = json.loads(json_string)
         if not isinstance(data, list):
             raise TypeError(f"Expected a JSON list of objects, got {type(data).__name__}")
@@ -510,6 +637,7 @@ class TableWrapper:
 
     @overload
     def __getitem__(self, index: int) -> dict[str, str]: ...
+
     @overload
     def __getitem__(self, index: slice) -> list[dict[str, str]]: ...
 
@@ -530,16 +658,17 @@ class TableWrapper:
             return [dict(row) for row in self._rows[index]]
         return dict(self._rows[index])
 
-    def __contains__(self, item: dict[str, str]) -> bool:
-        """Check if a row dict is present in the table.
+    def __contains__(self, item: object) -> bool:
+        """Check if a row dict equal to ``item`` is present in the table.
 
         Args:
-            item: A dict to search for (must match all keys/values).
+            item: A dict to search for. Only an exactly equal row
+                (same keys and values) counts as contained.
 
         Returns:
             ``True`` if an equivalent row exists, ``False`` otherwise.
         """
-        return item in self._rows
+        return isinstance(item, dict) and item in self._rows
 
     def __eq__(self, other: object) -> bool:
         """Compare two wrappers by headers and rows.
@@ -553,7 +682,7 @@ class TableWrapper:
         """
         if not isinstance(other, TableWrapper):
             return NotImplemented
-        return self.headers == other.headers and self._rows == other._rows
+        return self._headings == other._headings and self._rows == other._rows
 
     __hash__ = None
 
@@ -562,4 +691,4 @@ class TableWrapper:
         return len(self._rows)
 
     def __repr__(self) -> str:
-        return f"TableWrapper(headers={self.headers!r}, rows={len(self)})"
+        return f"TableWrapper(headers={self._headings!r}, rows={len(self)})"

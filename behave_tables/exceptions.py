@@ -18,13 +18,17 @@ class ColumnMismatchError(ValueError):
             missing: Column names that were expected but not present.
             extra: Column names that were present but not expected.
         """
-        parts = [f"missing columns: {missing}"] if missing else []
-        if extra:
-            parts.append(f"unexpected columns: {extra}")
+        self.missing = list(missing)
+        self.extra = list(extra or [])
+        parts = [f"missing columns: {self.missing}"] if self.missing else []
+        if self.extra:
+            parts.append(f"unexpected columns: {self.extra}")
         super().__init__("; ".join(parts) or "no column mismatch")
-        self.missing = missing
-        self.extra = extra or []
 
     def __repr__(self) -> str:
         """Return an unambiguous string representation of the error."""
         return f"ColumnMismatchError(missing={self.missing!r}, extra={self.extra!r})"
+
+    def __reduce__(self) -> tuple[type, tuple[list[str], list[str]]]:
+        """Support pickling so ``missing``/``extra`` and the message survive."""
+        return (type(self), (self.missing, self.extra))

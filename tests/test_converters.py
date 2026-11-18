@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import KW_ONLY, InitVar, dataclass, field
+from typing import ClassVar
 from unittest.mock import patch
 
 import pytest
@@ -160,3 +161,103 @@ class TestIsDataclassTypeEdgeCases:
 
     def test_instance_not_type_returns_false(self):
         assert is_dataclass_type(Sample("a", 1)) is False
+
+
+class TestModelFieldsInitFilter:
+    def test_init_false_field_excluded(self):
+        @dataclass
+        class WithComputed:
+            name: str
+            computed: str = field(init=False, default="derived")
+
+        assert _model_fields(WithComputed) == {"name"}
+
+    def test_initvar_included(self):
+        @dataclass
+        class WithInitVar:
+            name: str
+            token: InitVar = "default"
+
+        assert _model_fields(WithInitVar) == {"name", "token"}
+
+    def test_init_false_column_not_passed_to_model(self):
+        @dataclass
+        class WithComputed:
+            name: str
+            computed: str = field(init=False, default="derived")
+
+        result = convert_row_to_model({"name": "Alice", "computed": "ignored"}, WithComputed)
+        assert result.name == "Alice"
+        assert result.computed == "derived"
+
+    def test_classvar_excluded(self):
+        @dataclass
+        class WithClassVar:
+            name: str
+            KIND: ClassVar[str] = "user"
+
+        assert _model_fields(WithClassVar) == {"name"}
+
+    def test_classvar_column_not_passed_to_model(self):
+        @dataclass
+        class WithClassVar:
+            name: str
+            KIND: ClassVar[str] = "user"
+
+        result = convert_row_to_model({"name": "Alice", "KIND": "admin"}, WithClassVar)
+        assert result.name == "Alice"
+        assert result.KIND == "user"
+
+    def test_kw_only_marker_excluded(self):
+        @dataclass
+        class WithKwOnly:
+            name: str
+            _: KW_ONLY
+            age: str = "0"
+
+        assert _model_fields(WithKwOnly) == {"name", "age"}
+        result = convert_row_to_model({"name": "Alice", "age": "30", "_": "x"}, WithKwOnly)
+        assert result.age == "30"
+
+
+class TestModelFieldsPydanticAliases:
+    def test_alias_included(self):
+        pytest.importorskip("pydantic")
+        from pydantic import BaseModel, Field
+
+        class M(BaseModel):
+            name: str = Field(alias="user_name")
+
+        fields = _model_fields(M)
+        assert "name" in fields
+        assert "user_name" in fields
+
+    def test_validation_alias_str_included(self):
+        pytest.importorskip("pydantic")
+        from pydantic import BaseModel, Field
+
+        class M(BaseModel):
+            name: str = Field(validation_alias="user_name")
+
+        assert "user_name" in _model_fields(M)
+
+    def test_alias_choices_included(self):
+        pytest.importorskip("pydantic")
+        from pydantic import BaseModel, Field
+        from pydantic.aliases import AliasChoices
+
+        class M(BaseModel):
+            city: str = Field(validation_alias=AliasChoices("town", "city"))
+
+        fields = _model_fields(M)
+        assert {"city", "town"} <= fields
+
+    def test_convert_row_with_alias_column(self):
+        pytest.importorskip("pydantic")
+        from pydantic import BaseModel, Field
+
+        class M(BaseModel):
+            name: str = Field(alias="user_name")
+
+        result = convert_row_to_model({"user_name": "Alice"}, M)
+        assert result.name == "Alice"

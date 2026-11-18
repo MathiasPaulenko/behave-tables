@@ -475,8 +475,8 @@ class TestFromJson:
         json_str = '[{"a": "1", "b": "2"}, {"a": "1", "c": "3"}]'
         wt = TableWrapper.from_json(json_str)
         assert wt.headers == ["a", "b", "c"]
-        assert wt[0] == {"a": "1", "b": "2"}
-        assert wt[1] == {"a": "1", "c": "3"}
+        assert wt[0] == {"a": "1", "b": "2", "c": ""}
+        assert wt[1] == {"a": "1", "b": "", "c": "3"}
 
     def test_heterogeneous_column_returns_empty_for_missing(self):
         wt = TableWrapper.from_json('[{"a": "1", "b": "2"}, {"a": "1", "c": "3"}]')

@@ -9,9 +9,12 @@ from typing import Any
 def _model_fields(model: type) -> set[str] | None:
     """Return the set of field names accepted by the model.
 
-    For dataclasses, uses ``dataclasses.fields``. For Pydantic v2
-    models, uses ``model_fields``. Returns ``None`` if the field set
-    cannot be determined, in which case no filtering is applied.
+    For dataclasses, uses ``__dataclass_fields__`` restricted to real
+    fields that participate in ``__init__`` (InitVars included;
+    ``init=False``, ``ClassVar`` and keyword-only markers excluded).
+    For Pydantic v2 models, uses ``model_fields``
+    including field aliases. Returns ``None`` if the field set cannot
+    be determined, in which case no filtering is applied.
 
     Args:
         model: A Pydantic ``BaseModel`` subclass or a ``dataclass``.
@@ -20,9 +23,22 @@ def _model_fields(model: type) -> set[str] | None:
         A set of field name strings, or ``None``.
     """
     if dataclasses.is_dataclass(model):
-        return {f.name for f in dataclasses.fields(model)}
+        real = (dataclasses._FIELD, dataclasses._FIELD_INITVAR)
+        return {
+            n for n, f in model.__dataclass_fields__.items() if f.init and f._field_type in real
+        }
     if hasattr(model, "model_fields"):
-        return set(model.model_fields)
+        names: set[str] = set()
+        for name, field_info in model.model_fields.items():
+            names.add(name)
+            if isinstance(field_info.alias, str):
+                names.add(field_info.alias)
+            validation_alias = field_info.validation_alias
+            if isinstance(validation_alias, str):
+                names.add(validation_alias)
+            elif hasattr(validation_alias, "choices"):
+                names.update(c for c in validation_alias.choices if isinstance(c, str))
+        return names
     return None
 
 
