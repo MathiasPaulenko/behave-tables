@@ -1144,7 +1144,7 @@ class TestFromCsvValidation:
         assert wt.as_dicts() == [{"a": "1", "b": "2"}]
 
     def test_leading_blank_lines_ignored(self):
-        for prefix in ("\n", "\r\n", "\n\n", "\r\n\r\n"):
+        for prefix in ("\n", "\r\n", "\n\n", "\r\n\r\n", "\n\ufeff", "\r\n\ufeff\n"):
             wt = TableWrapper.from_csv(prefix + "a,b\n1,2")
             assert wt.headers == ["a", "b"]
             assert wt.as_dicts() == [{"a": "1", "b": "2"}]

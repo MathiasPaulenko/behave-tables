@@ -573,7 +573,7 @@ class TableWrapper:
         if not isinstance(csv_string, str):
             raise TypeError(f"csv_string must be a string, got {type(csv_string).__name__}")
         reader = csv.DictReader(
-            io.StringIO(csv_string.removeprefix("\ufeff").lstrip("\r\n")),
+            io.StringIO(csv_string.lstrip("\r\n\ufeff")),
             delimiter=delimiter,
             restval="",
         )
